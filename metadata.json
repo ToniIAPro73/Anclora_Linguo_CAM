@@ -1,0 +1,8 @@
+{
+  "name": "LinguoCam - Real-time Translingual Chat",
+  "description": "A high-performance real-time video chat interface featuring automated AI-powered translation and live subtitles for seamless cross-language communication.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
