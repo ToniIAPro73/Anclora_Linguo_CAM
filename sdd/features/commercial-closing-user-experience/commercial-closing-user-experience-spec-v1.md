@@ -3,21 +3,40 @@
 ## 0. Meta
 - Feature: commercial-closing-user-experience
 - Version: v1
-- Estado: draft inicial
+- Estado: implemented
 
 ## 1. Objetivo
-Implementar esta feature de forma end-to-end sin comprometer fiabilidad de llamada, comprension mutua, privacidad ni velocidad de cierre.
+Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por enlace y validacion previa de dispositivos/red.
 
-## 2. Alcance inicial
-- Incluye: definicion funcional, tecnica y criterios de aceptacion.
-- No incluye: funcionalidades fuera del backlog priorizado.
+## 2. Alcance
+- Incluye:
+  - flujo de sala por codigo/enlace,
+  - registro y resolucion de participantes en backend,
+  - pre-call check de camara, microfono, red y backend,
+  - flujo de llamada iniciada automaticamente por el participante iniciador de sala.
+- No incluye:
+  - persistencia de salas en base de datos,
+  - invitaciones por email/whatsapp automaticas.
 
-## 3. Cambios esperados
-- Frontend: por definir en iteracion de implementacion.
-- Backend/servicios: por definir en iteracion de implementacion.
-- Infra/configuracion: por definir en iteracion de implementacion.
+## 3. Cambios backend
+- `services/asr-mt/app/main.py`
+  - `GET /health`
+  - `POST /api/rooms/register`
+  - `POST /api/rooms/resolve`
+  - TTL de participantes en sala por `ROOM_PARTICIPANT_TTL_SECONDS`.
 
-## 4. Criterios de aceptacion base
-- Cumple baseline de entrega y QA.
-- Pasa npm run lint y npm run build.
-- Pasa prueba manual llamada 1:1 completa.
+## 4. Cambios frontend
+- `App.tsx`
+  - soporte `?room=` en URL.
+  - registro/polling de sala para encontrar counterpart.
+  - determinacion de iniciador para evitar doble marcado.
+  - pre-check de dispositivos/red desde setup.
+- `components/CallSetup.tsx`
+  - boton copiar enlace de invitacion.
+  - boton pre-check y estado inline.
+
+## 5. Criterios de aceptacion
+- [x] No se requiere intercambio manual de Peer ID para conectar.
+- [x] Existe enlace compartible de sala.
+- [x] Existe pre-check operativo previo a llamada.
+- [x] `npm run lint` y `npm run build` en verde.

@@ -60,6 +60,13 @@ interface UsageSummary {
   tts_limit: number;
 }
 
+interface RoomResolveResponse {
+  room_code: string;
+  participants: number;
+  target_peer_id: string | null;
+  initiator_peer_id: string | null;
+}
+
 type UiLocale = 'es' | 'en' | 'de' | 'ru' | 'fr' | 'it';
 
 const QUALITY_PROFILES: Record<string, QualityProfile> = {
@@ -70,6 +77,7 @@ const QUALITY_PROFILES: Record<string, QualityProfile> = {
 
 const SESSION_STORAGE_KEY = 'anclora_linguo_session';
 const UI_LOCALE_STORAGE_KEY = 'anclora_linguo_ui_locale';
+const ROOM_QUERY_PARAM = 'room';
 
 const UI_LOCALE_OPTIONS: Array<{ code: UiLocale; label: string }> = [
   { code: 'es', label: 'Español' },
@@ -93,6 +101,12 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     connecting: 'Conectando...',
     startCall: 'Iniciar llamada con traducción',
     copyHint: 'Pide a la otra persona su Peer ID para conectar.',
+    copyInviteLink: 'Copiar enlace',
+    runPrecheck: 'Pre-check',
+    checkingPrecheck: 'Comprobando...',
+    precheckOk: 'Pre-check OK: cámara, micrófono y red listos.',
+    precheckFail: 'Pre-check con incidencias. Revisa permisos o red.',
+    waitingInRoom: 'Esperando a otro participante en la sala...',
     secureAccess: 'Acceso seguro',
     secureAccessDesc: 'Cada llamada requiere participantes autenticados antes de conectar.',
     name: 'Nombre',
@@ -119,6 +133,12 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     connecting: 'Connecting...',
     startCall: 'Start translation call',
     copyHint: 'Ask the other person for their Peer ID to connect.',
+    copyInviteLink: 'Copy invite link',
+    runPrecheck: 'Pre-check',
+    checkingPrecheck: 'Checking...',
+    precheckOk: 'Pre-check OK: camera, microphone and network ready.',
+    precheckFail: 'Pre-check failed. Review permissions or network.',
+    waitingInRoom: 'Waiting for another participant in the room...',
     secureAccess: 'Secure access',
     secureAccessDesc: 'Every call requires authenticated participants before connection.',
     name: 'Name',
@@ -145,6 +165,12 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     connecting: 'Verbinden...',
     startCall: 'Übersetzungsanruf starten',
     copyHint: 'Bitte die andere Person um ihre Peer-ID.',
+    copyInviteLink: 'Link kopieren',
+    runPrecheck: 'Pre-Check',
+    checkingPrecheck: 'Prüfung...',
+    precheckOk: 'Pre-Check OK: Kamera, Mikrofon und Netzwerk bereit.',
+    precheckFail: 'Pre-Check fehlgeschlagen. Berechtigungen/Netz prüfen.',
+    waitingInRoom: 'Warte auf einen weiteren Teilnehmer im Raum...',
     secureAccess: 'Sicherer Zugang',
     secureAccessDesc: 'Jeder Anruf erfordert authentifizierte Teilnehmer vor der Verbindung.',
     name: 'Name',
@@ -171,6 +197,12 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     connecting: 'Подключение...',
     startCall: 'Начать звонок с переводом',
     copyHint: 'Попросите собеседника прислать Peer ID.',
+    copyInviteLink: 'Копировать ссылку',
+    runPrecheck: 'Пре-чек',
+    checkingPrecheck: 'Проверка...',
+    precheckOk: 'Пре-чек OK: камера, микрофон и сеть готовы.',
+    precheckFail: 'Проблема в пре-чеке. Проверьте сеть/разрешения.',
+    waitingInRoom: 'Ожидание второго участника в комнате...',
     secureAccess: 'Безопасный вход',
     secureAccessDesc: 'Перед подключением все участники должны быть аутентифицированы.',
     name: 'Имя',
@@ -197,6 +229,12 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     connecting: 'Connexion...',
     startCall: 'Démarrer l’appel traduit',
     copyHint: 'Demandez le Peer ID de l’autre personne.',
+    copyInviteLink: 'Copier le lien',
+    runPrecheck: 'Pré-check',
+    checkingPrecheck: 'Vérification...',
+    precheckOk: 'Pré-check OK : caméra, micro et réseau prêts.',
+    precheckFail: 'Pré-check en échec. Vérifiez permissions/réseau.',
+    waitingInRoom: 'En attente d’un autre participant dans la salle...',
     secureAccess: 'Accès sécurisé',
     secureAccessDesc: 'Chaque appel nécessite des participants authentifiés avant connexion.',
     name: 'Nom',
@@ -223,6 +261,12 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     connecting: 'Connessione...',
     startCall: 'Avvia chiamata tradotta',
     copyHint: "Chiedi all'altra persona il suo Peer ID.",
+    copyInviteLink: 'Copia link',
+    runPrecheck: 'Pre-check',
+    checkingPrecheck: 'Verifica...',
+    precheckOk: 'Pre-check OK: camera, microfono e rete pronti.',
+    precheckFail: 'Pre-check fallito. Controlla permessi o rete.',
+    waitingInRoom: 'In attesa di un altro partecipante nella stanza...',
     secureAccess: 'Accesso sicuro',
     secureAccessDesc: 'Ogni chiamata richiede partecipanti autenticati prima della connessione.',
     name: 'Nome',
@@ -268,6 +312,8 @@ const App: React.FC = () => {
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [isRunningPrecallCheck, setIsRunningPrecallCheck] = useState(false);
+  const [preCallStatus, setPreCallStatus] = useState('');
   const [uiLocale, setUiLocale] = useState<UiLocale>(() => {
     const stored = localStorage.getItem(UI_LOCALE_STORAGE_KEY) as UiLocale | null;
     return stored && UI_TEXTS[stored] ? stored : 'es';
@@ -448,6 +494,19 @@ const App: React.FC = () => {
   }, [uiLocale]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get(ROOM_QUERY_PARAM);
+    if (room && !targetPeerId) {
+      setTargetPeerId(room.toUpperCase());
+    }
+  }, [targetPeerId]);
+
+  useEffect(() => {
+    if (!peerId || targetPeerId) return;
+    setTargetPeerId(`ROOM-${peerId}`);
+  }, [peerId, targetPeerId]);
+
+  useEffect(() => {
     if (!HAS_TURN_SERVER) {
       setNetworkNotice(
         'TURN not configured. Calls may fail on restrictive NAT/firewall networks.',
@@ -536,6 +595,66 @@ const App: React.FC = () => {
     }
   }, [apiPost]);
 
+  const runPrecallCheck = useCallback(async () => {
+    setIsRunningPrecallCheck(true);
+    setPreCallStatus('');
+    try {
+      let mediaOk = false;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        stream.getTracks().forEach((track) => track.stop());
+        mediaOk = true;
+      } catch {
+        mediaOk = false;
+      }
+
+      const networkOk = navigator.onLine;
+      let backendOk = false;
+      try {
+        const response = await fetch(`${ASR_MT_HTTP_URL}/health`);
+        backendOk = response.ok;
+      } catch {
+        backendOk = false;
+      }
+
+      const ok = mediaOk && networkOk && backendOk;
+      setPreCallStatus(ok ? ui.precheckOk : ui.precheckFail);
+    } finally {
+      setIsRunningPrecallCheck(false);
+    }
+  }, [ui.precheckFail, ui.precheckOk]);
+
+  const registerRoomPresence = useCallback(async (roomCode: string) => {
+    if (!session?.token || !peerId) return;
+    await apiPost('/api/rooms/register', {
+      token: session.token,
+      room_code: roomCode,
+      peer_id: peerId,
+    });
+  }, [apiPost, peerId, session?.token]);
+
+  const waitForRoomPeer = useCallback(async (roomCode: string): Promise<RoomResolveResponse> => {
+    if (!session?.token || !peerId) {
+      throw new Error('missing session or peer');
+    }
+    const timeoutMs = 25000;
+    const startTime = Date.now();
+    while ((Date.now() - startTime) < timeoutMs) {
+      await registerRoomPresence(roomCode);
+      const resolved = await apiPost<RoomResolveResponse>('/api/rooms/resolve', {
+        token: session.token,
+        room_code: roomCode,
+        requester_peer_id: peerId,
+      });
+      if (resolved.target_peer_id && resolved.initiator_peer_id) {
+        return resolved;
+      }
+      setPreCallStatus(ui.waitingInRoom);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error('room participant timeout');
+  }, [apiPost, peerId, registerRoomPresence, session?.token, ui.waitingInRoom]);
+
   useEffect(() => {
     if (!session?.token) return;
     refreshUsageSummary(session.token);
@@ -597,7 +716,7 @@ const App: React.FC = () => {
       }
       try {
         const profile = QUALITY_PROFILES[qualityRef.current];
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = cameraStreamRef.current ?? await navigator.mediaDevices.getUserMedia({
           video: { width: profile.width, height: profile.height },
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
@@ -726,14 +845,18 @@ const App: React.FC = () => {
     if (peerConnectionState !== 'connected') {
       return alert('Signaling is reconnecting. Wait a moment and try again.');
     }
-    if (!targetPeerId) return alert('Enter a Peer ID to call');
-    if (targetPeerId === peerId) {
-      return alert("You cannot call yourself. Please ask for the other person's Peer ID.");
-    }
+    if (!targetPeerId) return alert(ui.joinRoomPlaceholder);
 
     setStatus(CallStatus.CONNECTING);
+    setPreCallStatus('');
 
     try {
+      const roomCode = targetPeerId.trim().toUpperCase();
+      const room = await waitForRoomPeer(roomCode);
+      if (!room.target_peer_id || !room.initiator_peer_id) {
+        throw new Error('room has no counterpart');
+      }
+
       const profile = QUALITY_PROFILES[quality];
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: profile.width, height: profile.height },
@@ -746,8 +869,15 @@ const App: React.FC = () => {
 
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-      const call = peerRef.current?.call(targetPeerId, stream);
-      const conn = peerRef.current?.connect(targetPeerId);
+      const shouldInitiate = room.initiator_peer_id === peerId;
+      if (!shouldInitiate) {
+        setPreCallStatus(ui.waitingInRoom);
+        setStatus(CallStatus.CONNECTING);
+        return;
+      }
+
+      const call = peerRef.current?.call(room.target_peer_id, stream);
+      const conn = peerRef.current?.connect(room.target_peer_id);
       if (!call || !conn) throw new Error('Peer connection unavailable');
 
       currentCallRef.current = call;
@@ -758,7 +888,7 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Error accessing media devices:', err);
       setStatus(CallStatus.IDLE);
-      alert('Error: Camera or Microphone access was denied. Please allow permissions and try again.');
+      alert('Error: camera/mic denied or room connection timeout.');
     }
   };
 
@@ -1037,6 +1167,15 @@ const App: React.FC = () => {
             navigator.clipboard.writeText(peerId);
             alert('Copied!');
           }}
+          onCopyInviteLink={() => {
+            const room = targetPeerId || `ROOM-${peerId}`;
+            const url = `${window.location.origin}${window.location.pathname}?${ROOM_QUERY_PARAM}=${encodeURIComponent(room)}`;
+            navigator.clipboard.writeText(url);
+            alert('Invite link copied.');
+          }}
+          onRunPrecallCheck={runPrecallCheck}
+          isRunningPrecallCheck={isRunningPrecallCheck}
+          preCallStatus={preCallStatus}
           uiText={{
             title: ui.appTitle,
             subtitle: ui.appSubtitle,
@@ -1049,6 +1188,9 @@ const App: React.FC = () => {
             connecting: ui.connecting,
             startCall: ui.startCall,
             copyHint: ui.copyHint,
+            copyInviteLink: ui.copyInviteLink,
+            runPrecheck: ui.runPrecheck,
+            checkingPrecheck: ui.checkingPrecheck,
           }}
         />
       </div>

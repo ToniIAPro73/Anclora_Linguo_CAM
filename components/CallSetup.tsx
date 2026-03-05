@@ -24,6 +24,10 @@ interface CallSetupProps {
   onRemoteLangChange: (lang: string) => void;
   onTargetPeerChange: (peerId: string) => void;
   onCopyPeerId: () => void;
+  onCopyInviteLink: () => void;
+  onRunPrecallCheck: () => void;
+  isRunningPrecallCheck: boolean;
+  preCallStatus: string;
   uiText: {
     title: string;
     subtitle: string;
@@ -36,6 +40,9 @@ interface CallSetupProps {
     connecting: string;
     startCall: string;
     copyHint: string;
+    copyInviteLink: string;
+    runPrecheck: string;
+    checkingPrecheck: string;
   };
 }
 
@@ -54,6 +61,10 @@ const CallSetup: React.FC<CallSetupProps> = ({
   onRemoteLangChange,
   onTargetPeerChange,
   onCopyPeerId,
+  onCopyInviteLink,
+  onRunPrecallCheck,
+  isRunningPrecallCheck,
+  preCallStatus,
   uiText,
 }) => {
   const isConnecting = status === CallStatus.CONNECTING;
@@ -120,6 +131,25 @@ const CallSetup: React.FC<CallSetupProps> = ({
                   onChange={(e) => onTargetPeerChange(e.target.value.toUpperCase())}
                   className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-4 max-[820px]:p-2.5 text-lg sm:text-xl max-[820px]:text-base font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all text-white"
                 />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={onCopyInviteLink}
+                    className="flex-1 bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 text-xs sm:text-sm py-2 rounded-lg border border-white/10"
+                  >
+                    {uiText.copyInviteLink}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onRunPrecallCheck}
+                    className="flex-1 bg-zinc-800/90 hover:bg-zinc-700 text-zinc-100 text-xs sm:text-sm py-2 rounded-lg border border-white/10"
+                  >
+                    {isRunningPrecallCheck ? uiText.checkingPrecheck : uiText.runPrecheck}
+                  </button>
+                </div>
+                {preCallStatus ? (
+                  <p className="text-[11px] text-zinc-400 px-1">{preCallStatus}</p>
+                ) : null}
               </div>
             </div>
 

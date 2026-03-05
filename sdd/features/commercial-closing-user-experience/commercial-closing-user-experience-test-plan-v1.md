@@ -5,8 +5,20 @@
 - npm run build
 - Prueba manual de llamada 1:1 (audio, video, subtitulos, chat, colgar)
 
-## Validaciones especificas
-- Definir durante implementacion de la feature.
+## Casos funcionales
+1. Enlace de sala
+- Usuario A copia enlace de sala.
+- Usuario B abre enlace (`?room=`) y se precarga sala.
 
-## Resultado
-- Estado: pendiente
+2. Resolucion de participantes
+- Ambos usuarios pulsan iniciar llamada.
+- El iniciador marca y el otro recibe llamada.
+
+3. Pre-check
+- Pulsar pre-check antes de llamar.
+- Mostrar resultado inline OK/error.
+
+## Resultado actual
+- lint: PASS
+- build: PASS
+- validacion manual 2 navegadores: PENDIENTE

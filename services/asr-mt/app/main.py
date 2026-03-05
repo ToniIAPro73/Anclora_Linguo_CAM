@@ -47,6 +47,8 @@ MAX_TTS_CHARS_PER_SESSION = int(os.getenv("MAX_TTS_CHARS_PER_SESSION", "12000"))
 
 SESSION_USAGE: dict[str, dict[str, int]] = {}
 TRANSLATION_CACHE: dict[str, str] = {}
+ROOM_PARTICIPANT_TTL_SECONDS = int(os.getenv("ROOM_PARTICIPANT_TTL_SECONDS", "180"))
+ROOM_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {}
 
 
 def _b64url(data: bytes) -> str:
@@ -167,6 +169,31 @@ class SessionUsageResponse(BaseModel):
     tts_limit: int
 
 
+class RoomRegisterRequest(BaseModel):
+    token: str
+    room_code: str
+    peer_id: str
+
+
+class RoomRegisterResponse(BaseModel):
+    status: str
+    room_code: str
+    participants: int
+
+
+class RoomResolveRequest(BaseModel):
+    token: str
+    room_code: str
+    requester_peer_id: str
+
+
+class RoomResolveResponse(BaseModel):
+    room_code: str
+    participants: int
+    target_peer_id: Optional[str]
+    initiator_peer_id: Optional[str]
+
+
 def _usage_bucket(user_id: str) -> dict[str, int]:
     bucket = SESSION_USAGE.get(user_id)
     if bucket is None:
@@ -191,6 +218,26 @@ def _translate_with_cache(mt_backend: MTBackend, text: str, source_lang: str, ta
     return translated
 
 
+def _normalize_room_code(room_code: str) -> str:
+    return room_code.strip().upper().replace(" ", "")
+
+
+def _cleanup_room(room_code: str) -> None:
+    room = ROOM_REGISTRY.get(room_code)
+    if room is None:
+        return
+    now = int(time.time())
+    stale_peers = [
+        peer_id
+        for peer_id, entry in room.items()
+        if (now - int(entry.get("last_seen", 0))) > ROOM_PARTICIPANT_TTL_SECONDS
+    ]
+    for peer_id in stale_peers:
+        room.pop(peer_id, None)
+    if not room:
+        ROOM_REGISTRY.pop(room_code, None)
+
+
 def build_asr_backend() -> ASRBackend:
     backend = os.getenv("ASR_BACKEND", "mock").lower()
     if backend == "mock":
@@ -209,6 +256,11 @@ def build_mt_backend() -> MTBackend:
         from .backends import TransformersMTBackend
         return TransformersMTBackend()
     raise ValueError(f"Unsupported MT backend: {backend}")
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.post("/api/auth/session", response_model=SessionCreateResponse)
@@ -303,6 +355,53 @@ async def session_usage(payload: SessionUsageRequest) -> SessionUsageResponse:
         tts_chars=usage["tts_chars"],
         translated_limit=MAX_TRANSLATION_CHARS_PER_SESSION,
         tts_limit=MAX_TTS_CHARS_PER_SESSION,
+    )
+
+
+@app.post("/api/rooms/register", response_model=RoomRegisterResponse)
+async def register_room(payload: RoomRegisterRequest) -> RoomRegisterResponse:
+    session = _validate_token(payload.token)
+    room_code = _normalize_room_code(payload.room_code)
+    if len(room_code) < 4:
+        raise HTTPException(status_code=400, detail="room code too short")
+
+    room = ROOM_REGISTRY.setdefault(room_code, {})
+    room[payload.peer_id] = {
+        "user_id": session["user_id"],
+        "display_name": session["display_name"],
+        "last_seen": int(time.time()),
+    }
+    _cleanup_room(room_code)
+    _append_audit_event(
+        "room_registered",
+        {
+            "room_code": room_code,
+            "peer_id": payload.peer_id,
+            "user_id": session["user_id"],
+            "participants": len(ROOM_REGISTRY.get(room_code, {})),
+        },
+    )
+    return RoomRegisterResponse(
+        status="ok", room_code=room_code, participants=len(ROOM_REGISTRY.get(room_code, {}))
+    )
+
+
+@app.post("/api/rooms/resolve", response_model=RoomResolveResponse)
+async def resolve_room(payload: RoomResolveRequest) -> RoomResolveResponse:
+    _validate_token(payload.token)
+    room_code = _normalize_room_code(payload.room_code)
+    _cleanup_room(room_code)
+    room = ROOM_REGISTRY.get(room_code, {})
+    participant_peer_ids = sorted(room.keys())
+    target_peer_id = next(
+        (peer for peer in participant_peer_ids if peer != payload.requester_peer_id), None
+    )
+    initiator_peer_id = participant_peer_ids[0] if len(participant_peer_ids) >= 2 else None
+    return RoomResolveResponse(
+        room_code=room_code,
+        participants=len(participant_peer_ids),
+        target_peer_id=target_peer_id,
+        initiator_peer_id=initiator_peer_id,
     )
 
 

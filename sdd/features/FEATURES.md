@@ -19,7 +19,7 @@ Registro centralizado de features priorizadas segun docs/analisis-completo-anclo
 
 ## 4. Commercial Closing User Experience (ALTA)
 - ID: ALC-CUX-001
-- Estado: Planned
+- Estado: Implemented (v1)
 - Carpeta: sdd/features/commercial-closing-user-experience/
 
 ## 5. Technical Quality and Maintainability (MEDIA)

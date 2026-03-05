@@ -20,3 +20,4 @@ Prerequisites:
 Notes:
 - No LLM API key is required in frontend.
 - For production-like reliability, configure TURN in `VITE_ICE_SERVERS`.
+- Call onboarding now supports room links (`?room=ROOM-CODE`) and built-in pre-call check.
