@@ -34,6 +34,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `AUDIT_LOG_PATH` = ruta de log append-only (default `runtime/audit-log.jsonl`)
 - `MAX_TRANSLATION_CHARS_PER_SESSION` = cuota de traduccion por sesion (default `20000`)
 - `MAX_TTS_CHARS_PER_SESSION` = cuota de TTS por sesion (default `12000`)
+- `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
+- `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)
 - `ASR_DEVICE` = `cpu` (ej. `cuda`)
 - `ASR_COMPUTE_TYPE` = `int8` (ej. `float16`)
@@ -83,6 +85,18 @@ Unifica flujo de TTS bajo backend: traduce/prepara texto y aplica cuota de TTS p
 
 ### `POST /api/sessions/usage`
 Devuelve consumo de sesion para gobernanza de coste (`translated_chars`, `tts_chars`, limites).
+
+### `POST /api/rooms/register`
+Registra presencia de peer autenticado en sala.
+
+### `POST /api/rooms/resolve`
+Resuelve contraparte e iniciador de llamada en sala.
+
+### `POST /api/telemetry/events`
+Ingesta eventos de operacion de llamada/reconexion/precheck.
+
+### `POST /api/telemetry/summary`
+Resumen agregado de eventos de operacion por sesion.
 
 ### `POST /api/sessions/consent`
 Registra consentimiento explicito de grabacion por `call_id` en audit log append-only.

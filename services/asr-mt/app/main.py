@@ -49,6 +49,8 @@ SESSION_USAGE: dict[str, dict[str, int]] = {}
 TRANSLATION_CACHE: dict[str, str] = {}
 ROOM_PARTICIPANT_TTL_SECONDS = int(os.getenv("ROOM_PARTICIPANT_TTL_SECONDS", "180"))
 ROOM_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {}
+MAX_TELEMETRY_EVENTS_PER_SESSION = int(os.getenv("MAX_TELEMETRY_EVENTS_PER_SESSION", "500"))
+TELEMETRY_EVENTS: dict[str, list[dict[str, Any]]] = {}
 
 
 def _b64url(data: bytes) -> str:
@@ -194,6 +196,36 @@ class RoomResolveResponse(BaseModel):
     initiator_peer_id: Optional[str]
 
 
+class TelemetryEvent(BaseModel):
+    type: str
+    timestamp_ms: int
+    payload: dict[str, Any] = {}
+
+
+class TelemetryBatchRequest(BaseModel):
+    token: str
+    call_id: str
+    events: list[TelemetryEvent]
+
+
+class TelemetryBatchResponse(BaseModel):
+    status: str
+    accepted_events: int
+    total_events_in_session: int
+
+
+class TelemetrySummaryRequest(BaseModel):
+    token: str
+
+
+class TelemetrySummaryResponse(BaseModel):
+    total_events: int
+    call_started: int
+    call_ended: int
+    reconnect_events: int
+    precheck_failures: int
+
+
 def _usage_bucket(user_id: str) -> dict[str, int]:
     bucket = SESSION_USAGE.get(user_id)
     if bucket is None:
@@ -236,6 +268,14 @@ def _cleanup_room(room_code: str) -> None:
         room.pop(peer_id, None)
     if not room:
         ROOM_REGISTRY.pop(room_code, None)
+
+
+def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
+    bucket = TELEMETRY_EVENTS.get(user_id)
+    if bucket is None:
+        bucket = []
+        TELEMETRY_EVENTS[user_id] = bucket
+    return bucket
 
 
 def build_asr_backend() -> ASRBackend:
@@ -402,6 +442,63 @@ async def resolve_room(payload: RoomResolveRequest) -> RoomResolveResponse:
         participants=len(participant_peer_ids),
         target_peer_id=target_peer_id,
         initiator_peer_id=initiator_peer_id,
+    )
+
+
+@app.post("/api/telemetry/events", response_model=TelemetryBatchResponse)
+async def ingest_telemetry(payload: TelemetryBatchRequest) -> TelemetryBatchResponse:
+    session = _validate_token(payload.token)
+    bucket = _telemetry_bucket(session["user_id"])
+    accepted = 0
+    for event in payload.events:
+        if len(bucket) >= MAX_TELEMETRY_EVENTS_PER_SESSION:
+            break
+        serialized = {
+            "call_id": payload.call_id,
+            "type": event.type,
+            "timestamp_ms": event.timestamp_ms,
+            "payload": event.payload,
+        }
+        bucket.append(serialized)
+        accepted += 1
+        _append_audit_event(
+            "telemetry_event",
+            {
+                "user_id": session["user_id"],
+                "call_id": payload.call_id,
+                "event_type": event.type,
+            },
+        )
+    return TelemetryBatchResponse(
+        status="ok",
+        accepted_events=accepted,
+        total_events_in_session=len(bucket),
+    )
+
+
+@app.post("/api/telemetry/summary", response_model=TelemetrySummaryResponse)
+async def telemetry_summary(payload: TelemetrySummaryRequest) -> TelemetrySummaryResponse:
+    session = _validate_token(payload.token)
+    bucket = _telemetry_bucket(session["user_id"])
+    call_started = sum(1 for event in bucket if event.get("type") == "call_started")
+    call_ended = sum(1 for event in bucket if event.get("type") == "call_ended")
+    reconnect_events = sum(
+        1
+        for event in bucket
+        if event.get("type") in {"peer_reconnecting", "subtitle_reconnecting"}
+    )
+    precheck_failures = sum(
+        1
+        for event in bucket
+        if event.get("type") == "precheck_result"
+        and not bool(event.get("payload", {}).get("ok", False))
+    )
+    return TelemetrySummaryResponse(
+        total_events=len(bucket),
+        call_started=call_started,
+        call_ended=call_ended,
+        reconnect_events=reconnect_events,
+        precheck_failures=precheck_failures,
     )
 
 

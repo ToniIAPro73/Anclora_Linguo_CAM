@@ -73,6 +73,10 @@ interface RoomResolveResponse {
   initiator_peer_id: string | null;
 }
 
+interface TelemetryEventPayload {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
 type UiLocale = 'es' | 'en' | 'de' | 'ru' | 'fr' | 'it';
 
 const QUALITY_PROFILES: Record<string, QualityProfile> = {
@@ -347,6 +351,7 @@ const App: React.FC = () => {
   const sessionRef = useRef<SessionInfo | null>(null);
   const statusRef = useRef<CallStatus>(status);
   const resetCallStateRef = useRef<() => void>(() => undefined);
+  const lastSubtitleReconnectAttemptRef = useRef<number>(0);
 
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
@@ -450,6 +455,7 @@ const App: React.FC = () => {
   const handleCall = useCallback((call: any, stream: MediaStream) => {
     setStatus(CallStatus.ACTIVE);
     setNetworkNotice('');
+    trackTelemetry('call_started', { quality });
     call.on('stream', (remoteStream: MediaStream) => {
       remoteStreamRef.current = remoteStream;
       if (remoteVideoRef.current) {
@@ -463,9 +469,10 @@ const App: React.FC = () => {
     });
     call.on('error', () => {
       setNetworkNotice('Call transport error. Trying to recover.');
+      trackTelemetry('call_transport_error');
     });
     streamingStartRef.current(stream);
-  }, []);
+  }, [quality, trackTelemetry]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -523,6 +530,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (status !== CallStatus.ACTIVE) return;
     if (translationConnectionState === 'reconnecting') {
+      if (lastSubtitleReconnectAttemptRef.current !== translationReconnectAttempts) {
+        lastSubtitleReconnectAttemptRef.current = translationReconnectAttempts;
+        trackTelemetry('subtitle_reconnecting', { attempt: translationReconnectAttempts });
+      }
       setNetworkNotice(
         `Translation stream reconnecting (attempt ${translationReconnectAttempts}/${5})...`,
       );
@@ -530,12 +541,13 @@ const App: React.FC = () => {
     }
     if (translationConnectionState === 'error') {
       setNetworkNotice('Translation stream disconnected. Subtitles may be delayed.');
+      trackTelemetry('subtitle_error');
       return;
     }
     if (translationConnectionState === 'connected') {
       setNetworkNotice('');
     }
-  }, [status, translationConnectionState, translationReconnectAttempts]);
+  }, [status, trackTelemetry, translationConnectionState, translationReconnectAttempts]);
 
   const recordingStopRef = useRef(recording.stopRecording);
   const streamingStartRef = useRef(startStreaming);
@@ -558,6 +570,25 @@ const App: React.FC = () => {
     }
     return response.json() as Promise<T>;
   }, []);
+
+  const trackTelemetry = useCallback(async (eventType: string, payload: TelemetryEventPayload = {}) => {
+    if (!session?.token) return;
+    try {
+      await apiPost('/api/telemetry/events', {
+        token: session.token,
+        call_id: activeCallIdRef.current || 'n/a',
+        events: [
+          {
+            type: eventType,
+            timestamp_ms: Date.now(),
+            payload,
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('Telemetry send failed:', error);
+    }
+  }, [apiPost, session?.token]);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -625,10 +656,11 @@ const App: React.FC = () => {
 
       const ok = mediaOk && networkOk && backendOk;
       setPreCallStatus(ok ? ui.precheckOk : ui.precheckFail);
+      trackTelemetry('precheck_result', { ok, media_ok: mediaOk, network_ok: networkOk, backend_ok: backendOk });
     } finally {
       setIsRunningPrecallCheck(false);
     }
-  }, [ui.precheckFail, ui.precheckOk]);
+  }, [trackTelemetry, ui.precheckFail, ui.precheckOk]);
 
   const registerRoomPresence = useCallback(async (roomCode: string) => {
     if (!session?.token || !peerId) return;
@@ -757,6 +789,7 @@ const App: React.FC = () => {
     peer.on('disconnected', () => {
       setPeerConnectionState('reconnecting');
       setNetworkNotice('Signaling disconnected. Reconnecting...');
+      trackTelemetry('peer_reconnecting');
       peer.reconnect();
     });
 
@@ -771,7 +804,7 @@ const App: React.FC = () => {
       streamingStopRef.current?.();
       peer.destroy();
     };
-  }, [applyBitrateLimit, handleCall, setupDataChannel]);
+  }, [applyBitrateLimit, handleCall, setupDataChannel, trackTelemetry]);
 
   const sendChatMessage = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -880,6 +913,7 @@ const App: React.FC = () => {
       if (!shouldInitiate) {
         setPreCallStatus(ui.waitingInRoom);
         setStatus(CallStatus.CONNECTING);
+        trackTelemetry('waiting_in_room', { room_code: normalizedRoomCode });
         return;
       }
 
@@ -892,6 +926,7 @@ const App: React.FC = () => {
       setupDataChannel(conn);
       handleCall(call, stream);
       applyBitrateLimit(call, profile.maxBitrate);
+      trackTelemetry('call_attempt_started', { room_code: normalizedRoomCode });
     } catch (err) {
       console.error('Error accessing media devices:', err);
       setStatus(CallStatus.IDLE);
@@ -1029,6 +1064,11 @@ const App: React.FC = () => {
       currentCallRef.current.close();
     }
 
+    trackTelemetry('call_ended', {
+      bitrate_kbps: webrtcStats.bitrateKbps ?? -1,
+      packet_loss_pct: webrtcStats.packetLossPct ?? -1,
+      latency_ms: latencyMs ?? -1,
+    });
     resetCallState();
   };
 

@@ -3,21 +3,42 @@
 ## 0. Meta
 - Feature: observability-and-operational-excellence
 - Version: v1
-- Estado: draft inicial
+- Estado: implemented
 
 ## 1. Objetivo
-Implementar esta feature de forma end-to-end sin comprometer fiabilidad de llamada, comprension mutua, privacidad ni velocidad de cierre.
+Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados para detectar degradaciones y mejorar decisiones de producto/comercial.
 
-## 2. Alcance inicial
-- Incluye: definicion funcional, tecnica y criterios de aceptacion.
-- No incluye: funcionalidades fuera del backlog priorizado.
+## 2. Alcance
+- Incluye:
+  - ingesta backend de eventos de telemetria,
+  - resumen agregado por sesion,
+  - emision frontend en hitos clave (pre-check, reconexiones, call start/end),
+  - configuracion de limites de eventos por sesion.
+- No incluye:
+  - dashboard grafico externo (Grafana/BI).
 
-## 3. Cambios esperados
-- Frontend: por definir en iteracion de implementacion.
-- Backend/servicios: por definir en iteracion de implementacion.
-- Infra/configuracion: por definir en iteracion de implementacion.
+## 3. Cambios backend
+- `services/asr-mt/app/main.py`
+  - `POST /api/telemetry/events`
+  - `POST /api/telemetry/summary`
+  - almacenamiento in-memory acotado por `MAX_TELEMETRY_EVENTS_PER_SESSION`.
 
-## 4. Criterios de aceptacion base
-- Cumple baseline de entrega y QA.
-- Pasa npm run lint y npm run build.
-- Pasa prueba manual llamada 1:1 completa.
+## 4. Cambios frontend
+- `App.tsx`
+  - helper `trackTelemetry`.
+  - eventos emitidos:
+    - `precheck_result`
+    - `waiting_in_room`
+    - `call_attempt_started`
+    - `call_started`
+    - `call_transport_error`
+    - `peer_reconnecting`
+    - `subtitle_reconnecting`
+    - `subtitle_error`
+    - `call_ended`
+
+## 5. Criterios de aceptacion
+- [x] Eventos de red/traduccion se envian a backend.
+- [x] Eventos de producto (precheck, call start/end) quedan registrados.
+- [x] Existe endpoint de resumen para operacion.
+- [x] `npm run lint`, `npm run test`, `npm run build` en verde.
