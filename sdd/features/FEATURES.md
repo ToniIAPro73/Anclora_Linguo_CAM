@@ -14,7 +14,7 @@ Registro centralizado de features priorizadas segun docs/analisis-completo-anclo
 
 ## 3. Translation Architecture and Cost Governance (ALTA)
 - ID: ALC-TAC-001
-- Estado: Planned
+- Estado: Implemented (v1)
 - Carpeta: sdd/features/translation-architecture-and-cost-governance/
 
 ## 4. Commercial Closing User Experience (ALTA)

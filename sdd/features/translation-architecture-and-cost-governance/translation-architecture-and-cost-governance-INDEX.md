@@ -1,7 +1,7 @@
 # translation-architecture-and-cost-governance — INDEX
 
 ## Estado
-- Version activa: v1 (draft)
+- Version activa: v1 (implemented)
 - Prioridad: definida en sdd/features/FEATURES.md
 
 ## Documentos

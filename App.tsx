@@ -53,6 +53,13 @@ interface ConsentResponse {
   consent_id: string;
 }
 
+interface UsageSummary {
+  translated_chars: number;
+  tts_chars: number;
+  translated_limit: number;
+  tts_limit: number;
+}
+
 type UiLocale = 'es' | 'en' | 'de' | 'ru' | 'fr' | 'it';
 
 const QUALITY_PROFILES: Record<string, QualityProfile> = {
@@ -260,6 +267,7 @@ const App: React.FC = () => {
   const [authRole, setAuthRole] = useState<'agent' | 'investor'>('agent');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [uiLocale, setUiLocale] = useState<UiLocale>(() => {
     const stored = localStorage.getItem(UI_LOCALE_STORAGE_KEY) as UiLocale | null;
     return stored && UI_TEXTS[stored] ? stored : 'es';
@@ -519,6 +527,20 @@ const App: React.FC = () => {
     restoreSession();
   }, [apiPost]);
 
+  const refreshUsageSummary = useCallback(async (authToken: string) => {
+    try {
+      const summary = await apiPost<UsageSummary>('/api/sessions/usage', { token: authToken });
+      setUsageSummary(summary);
+    } catch (error) {
+      console.error('Usage summary error:', error);
+    }
+  }, [apiPost]);
+
+  useEffect(() => {
+    if (!session?.token) return;
+    refreshUsageSummary(session.token);
+  }, [session?.token, refreshUsageSummary]);
+
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = authName.trim();
@@ -660,6 +682,7 @@ const App: React.FC = () => {
         setMessages((prev) =>
           prev.map((m) => (m.id === msg.id ? { ...m, translatedText: response.translated_text } : m)),
         );
+        if (session?.token) refreshUsageSummary(session.token);
       }
     } catch (error) {
       console.error('Translation error:', error);
@@ -673,27 +696,25 @@ const App: React.FC = () => {
     setSpeakingMessageId(msg.id);
 
     try {
-      let textToSpeak = msg.translatedText;
-      if (!textToSpeak) {
-        const source = msg.sender === 'peer' ? remoteLang : myLang;
-        const target = msg.sender === 'peer' ? myLang : remoteLang;
-        const response = await apiPost<{ translated_text: string }>('/api/chat/translate', {
-          token: session.token,
-          text: msg.text,
-          source_lang: source,
-          target_lang: target,
-        });
-        textToSpeak = response.translated_text;
-      }
+      const source = msg.sender === 'peer' ? remoteLang : myLang;
+      const target = msg.sender === 'peer' ? myLang : remoteLang;
+      const ttsResponse = await apiPost<{ text_to_speak: string; voice_lang: string }>('/api/chat/tts', {
+        token: session.token,
+        text: msg.translatedText || msg.text,
+        source_lang: source,
+        target_lang: target,
+      });
+      const textToSpeak = ttsResponse.text_to_speak;
 
       if (!textToSpeak) return;
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.lang = msg.sender === 'peer' ? myLang : remoteLang;
+      utterance.lang = ttsResponse.voice_lang || (msg.sender === 'peer' ? myLang : remoteLang);
       utterance.rate = 1;
       utterance.onend = () => setSpeakingMessageId(null);
       utterance.onerror = () => setSpeakingMessageId(null);
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
+      refreshUsageSummary(session.token);
     } catch (error) {
       console.error('TTS error:', error);
       setSpeakingMessageId(null);
@@ -1042,6 +1063,11 @@ const App: React.FC = () => {
       >
         {session.displayName} ({session.role})
       </button>
+      {usageSummary ? (
+        <div className="absolute top-14 right-4 z-20 bg-zinc-900/90 border border-zinc-700 text-[11px] px-3 py-1.5 rounded-lg text-zinc-300">
+          MT {usageSummary.translated_chars}/{usageSummary.translated_limit} | TTS {usageSummary.tts_chars}/{usageSummary.tts_limit}
+        </div>
+      ) : null}
 
       <CallHeader
         peerId={peerId}

@@ -32,6 +32,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `SESSION_SIGNING_KEY` = clave HMAC para tokens de sesion (**obligatoria en prod**)
 - `SESSION_TTL_SECONDS` = tiempo de vida de sesion (default `28800`)
 - `AUDIT_LOG_PATH` = ruta de log append-only (default `runtime/audit-log.jsonl`)
+- `MAX_TRANSLATION_CHARS_PER_SESSION` = cuota de traduccion por sesion (default `20000`)
+- `MAX_TTS_CHARS_PER_SESSION` = cuota de TTS por sesion (default `12000`)
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)
 - `ASR_DEVICE` = `cpu` (ej. `cuda`)
 - `ASR_COMPUTE_TYPE` = `int8` (ej. `float16`)
@@ -75,6 +77,12 @@ Valida token de sesion.
 
 ### `POST /api/chat/translate`
 Traduce mensajes de chat via backend MT.
+
+### `POST /api/chat/tts`
+Unifica flujo de TTS bajo backend: traduce/prepara texto y aplica cuota de TTS por sesion.
+
+### `POST /api/sessions/usage`
+Devuelve consumo de sesion para gobernanza de coste (`translated_chars`, `tts_chars`, limites).
 
 ### `POST /api/sessions/consent`
 Registra consentimiento explicito de grabacion por `call_id` en audit log append-only.

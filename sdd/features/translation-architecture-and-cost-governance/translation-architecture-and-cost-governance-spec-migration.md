@@ -1,12 +1,19 @@
 # Migration Spec — translation-architecture-and-cost-governance
 
 ## Objetivo
-Documentar cambios de compatibilidad y migraciones de datos/configuracion requeridos por la feature.
+Migrar hacia capa unificada de traduccion/TTS backend-managed con control de coste por sesion.
 
-## Estado actual
-- Pendiente de definir durante implementacion v1.
+## Cambios aplicados
+- `speakMessage` mueve flujo a backend (`/api/chat/tts`).
+- `chat/translate` incorpora cuota y trazabilidad de consumo.
+- Nuevo endpoint de consumo de sesion para UI y operacion.
 
-## Checklist
-- [ ] Cambios de esquema (si aplica)
-- [ ] Estrategia de rollout/rollback
-- [ ] Impacto en clientes activos
+## Rollout recomendado
+1. Configurar limites por entorno en `.env*`.
+2. Desplegar backend ASR/MT.
+3. Verificar translate + tts + usage en cliente.
+4. Ajustar limites segun carga real.
+
+## Rollback
+- Revertir commit de feature.
+- Mantener endpoints nuevos (compatibles) aunque no se usen en frontend.

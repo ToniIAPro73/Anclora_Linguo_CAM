@@ -40,6 +40,13 @@ app.add_middleware(
 SESSION_SIGNING_KEY = os.getenv("SESSION_SIGNING_KEY", "change-me-in-production")
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "28800"))
 AUDIT_LOG_PATH = Path(os.getenv("AUDIT_LOG_PATH", "runtime/audit-log.jsonl"))
+MAX_TRANSLATION_CHARS_PER_SESSION = int(
+    os.getenv("MAX_TRANSLATION_CHARS_PER_SESSION", "20000")
+)
+MAX_TTS_CHARS_PER_SESSION = int(os.getenv("MAX_TTS_CHARS_PER_SESSION", "12000"))
+
+SESSION_USAGE: dict[str, dict[str, int]] = {}
+TRANSLATION_CACHE: dict[str, str] = {}
 
 
 def _b64url(data: bytes) -> str:
@@ -126,6 +133,18 @@ class ChatTranslateResponse(BaseModel):
     translated_text: str
 
 
+class ChatTTSRequest(BaseModel):
+    token: str
+    text: str
+    source_lang: str
+    target_lang: str
+
+
+class ChatTTSResponse(BaseModel):
+    text_to_speak: str
+    voice_lang: str
+
+
 class ConsentEventRequest(BaseModel):
     token: str
     call_id: str
@@ -135,6 +154,41 @@ class ConsentEventRequest(BaseModel):
 class ConsentEventResponse(BaseModel):
     status: str
     consent_id: str
+
+
+class SessionUsageRequest(BaseModel):
+    token: str
+
+
+class SessionUsageResponse(BaseModel):
+    translated_chars: int
+    tts_chars: int
+    translated_limit: int
+    tts_limit: int
+
+
+def _usage_bucket(user_id: str) -> dict[str, int]:
+    bucket = SESSION_USAGE.get(user_id)
+    if bucket is None:
+        bucket = {"translated_chars": 0, "tts_chars": 0}
+        SESSION_USAGE[user_id] = bucket
+    return bucket
+
+
+def _cache_key(text: str, source_lang: str, target_lang: str) -> str:
+    return f"{source_lang}:{target_lang}:{text.strip().lower()}"
+
+
+def _translate_with_cache(mt_backend: MTBackend, text: str, source_lang: str, target_lang: str) -> str:
+    key = _cache_key(text, source_lang, target_lang)
+    cached = TRANSLATION_CACHE.get(key)
+    if cached is not None:
+        return cached
+    translated = mt_backend.translate(text, source_lang, target_lang)
+    TRANSLATION_CACHE[key] = translated
+    if len(TRANSLATION_CACHE) > 5000:
+        TRANSLATION_CACHE.pop(next(iter(TRANSLATION_CACHE)))
+    return translated
 
 
 def build_asr_backend() -> ASRBackend:
@@ -195,10 +249,61 @@ async def validate_session(payload: SessionValidateRequest) -> dict[str, Any]:
 
 @app.post("/api/chat/translate", response_model=ChatTranslateResponse)
 async def translate_chat(payload: ChatTranslateRequest) -> ChatTranslateResponse:
-    _validate_token(payload.token)
+    session = _validate_token(payload.token)
+    usage = _usage_bucket(session["user_id"])
+    next_chars = usage["translated_chars"] + len(payload.text)
+    if next_chars > MAX_TRANSLATION_CHARS_PER_SESSION:
+        raise HTTPException(status_code=429, detail="session translation quota exceeded")
     mt_backend = build_mt_backend()
-    translated = mt_backend.translate(payload.text, payload.source_lang, payload.target_lang)
+    translated = _translate_with_cache(
+        mt_backend, payload.text, payload.source_lang, payload.target_lang
+    )
+    usage["translated_chars"] = next_chars
+    _append_audit_event(
+        "translation_usage",
+        {
+            "user_id": session["user_id"],
+            "translated_chars": usage["translated_chars"],
+            "translated_limit": MAX_TRANSLATION_CHARS_PER_SESSION,
+        },
+    )
     return ChatTranslateResponse(translated_text=translated)
+
+
+@app.post("/api/chat/tts", response_model=ChatTTSResponse)
+async def tts_chat(payload: ChatTTSRequest) -> ChatTTSResponse:
+    session = _validate_token(payload.token)
+    usage = _usage_bucket(session["user_id"])
+    next_chars = usage["tts_chars"] + len(payload.text)
+    if next_chars > MAX_TTS_CHARS_PER_SESSION:
+        raise HTTPException(status_code=429, detail="session tts quota exceeded")
+
+    mt_backend = build_mt_backend()
+    translated = _translate_with_cache(
+        mt_backend, payload.text, payload.source_lang, payload.target_lang
+    )
+    usage["tts_chars"] = next_chars
+    _append_audit_event(
+        "tts_usage",
+        {
+            "user_id": session["user_id"],
+            "tts_chars": usage["tts_chars"],
+            "tts_limit": MAX_TTS_CHARS_PER_SESSION,
+        },
+    )
+    return ChatTTSResponse(text_to_speak=translated, voice_lang=payload.target_lang or "en")
+
+
+@app.post("/api/sessions/usage", response_model=SessionUsageResponse)
+async def session_usage(payload: SessionUsageRequest) -> SessionUsageResponse:
+    session = _validate_token(payload.token)
+    usage = _usage_bucket(session["user_id"])
+    return SessionUsageResponse(
+        translated_chars=usage["translated_chars"],
+        tts_chars=usage["tts_chars"],
+        translated_limit=MAX_TRANSLATION_CHARS_PER_SESSION,
+        tts_limit=MAX_TTS_CHARS_PER_SESSION,
+    )
 
 
 @app.post("/api/sessions/consent", response_model=ConsentEventResponse)
