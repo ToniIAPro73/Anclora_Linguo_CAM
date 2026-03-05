@@ -28,6 +28,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `ASR_BACKEND` = `mock` (default) o `faster-whisper`
 - `MT_BACKEND` = `mock` o `marian`
 - `LOG_LEVEL` = `info`
+- `ALLOWED_ORIGINS` = lista separada por coma (default `*`)
+- `SESSION_SIGNING_KEY` = clave HMAC para tokens de sesion (**obligatoria en prod**)
+- `SESSION_TTL_SECONDS` = tiempo de vida de sesion (default `28800`)
+- `AUDIT_LOG_PATH` = ruta de log append-only (default `runtime/audit-log.jsonl`)
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)
 - `ASR_DEVICE` = `cpu` (ej. `cuda`)
 - `ASR_COMPUTE_TYPE` = `int8` (ej. `float16`)
@@ -55,3 +59,22 @@ Para NLLB usa un modelo NLLB y codigos compatibles (se mapean los idiomas mas co
 Por defecto, el servicio elige automaticamente modelos Marian para:
 `es-en`, `en-es`, `es-fr`, `fr-es`, `es-de`, `de-es`, `es-ru`, `ru-es`.  
 Puedes sobrescribir con `MT_MODEL_MAP`.
+
+## API HTTP (seguridad/compliance)
+
+### `POST /api/auth/session`
+Genera sesion firmada para acceso a llamada.
+
+Body:
+```json
+{ "display_name": "Ana Gomez", "role": "agent" }
+```
+
+### `POST /api/auth/validate`
+Valida token de sesion.
+
+### `POST /api/chat/translate`
+Traduce mensajes de chat via backend MT.
+
+### `POST /api/sessions/consent`
+Registra consentimiento explicito de grabacion por `call_id` en audit log append-only.

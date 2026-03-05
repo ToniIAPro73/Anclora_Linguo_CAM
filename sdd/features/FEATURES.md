@@ -4,7 +4,7 @@ Registro centralizado de features priorizadas segun docs/analisis-completo-anclo
 
 ## 1. Security, Compliance and Commercial Continuity (CRITICA)
 - ID: ALC-SCC-001
-- Estado: Planned
+- Estado: Implemented (v1)
 - Carpeta: sdd/features/security-compliance-and-commercial-continuity/
 
 ## 2. Call Reliability and Network Resilience (CRITICA)
