@@ -352,6 +352,9 @@ const App: React.FC = () => {
   const statusRef = useRef<CallStatus>(status);
   const resetCallStateRef = useRef<() => void>(() => undefined);
   const lastSubtitleReconnectAttemptRef = useRef<number>(0);
+  const trackTelemetryRef = useRef<(eventType: string, payload?: TelemetryEventPayload) => void>(
+    () => undefined,
+  );
 
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
@@ -455,7 +458,7 @@ const App: React.FC = () => {
   const handleCall = useCallback((call: any, stream: MediaStream) => {
     setStatus(CallStatus.ACTIVE);
     setNetworkNotice('');
-    trackTelemetry('call_started', { quality });
+    trackTelemetryRef.current('call_started', { quality });
     call.on('stream', (remoteStream: MediaStream) => {
       remoteStreamRef.current = remoteStream;
       if (remoteVideoRef.current) {
@@ -469,10 +472,10 @@ const App: React.FC = () => {
     });
     call.on('error', () => {
       setNetworkNotice('Call transport error. Trying to recover.');
-      trackTelemetry('call_transport_error');
+      trackTelemetryRef.current('call_transport_error');
     });
     streamingStartRef.current(stream);
-  }, [quality, trackTelemetry]);
+  }, [quality]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -532,7 +535,7 @@ const App: React.FC = () => {
     if (translationConnectionState === 'reconnecting') {
       if (lastSubtitleReconnectAttemptRef.current !== translationReconnectAttempts) {
         lastSubtitleReconnectAttemptRef.current = translationReconnectAttempts;
-        trackTelemetry('subtitle_reconnecting', { attempt: translationReconnectAttempts });
+        trackTelemetryRef.current('subtitle_reconnecting', { attempt: translationReconnectAttempts });
       }
       setNetworkNotice(
         `Translation stream reconnecting (attempt ${translationReconnectAttempts}/${5})...`,
@@ -541,13 +544,13 @@ const App: React.FC = () => {
     }
     if (translationConnectionState === 'error') {
       setNetworkNotice('Translation stream disconnected. Subtitles may be delayed.');
-      trackTelemetry('subtitle_error');
+      trackTelemetryRef.current('subtitle_error');
       return;
     }
     if (translationConnectionState === 'connected') {
       setNetworkNotice('');
     }
-  }, [status, trackTelemetry, translationConnectionState, translationReconnectAttempts]);
+  }, [status, translationConnectionState, translationReconnectAttempts]);
 
   const recordingStopRef = useRef(recording.stopRecording);
   const streamingStartRef = useRef(startStreaming);
@@ -589,6 +592,12 @@ const App: React.FC = () => {
       console.error('Telemetry send failed:', error);
     }
   }, [apiPost, session?.token]);
+
+  useEffect(() => {
+    trackTelemetryRef.current = (eventType: string, payload: TelemetryEventPayload = {}) => {
+      trackTelemetry(eventType, payload);
+    };
+  }, [trackTelemetry]);
 
   useEffect(() => {
     const restoreSession = async () => {
