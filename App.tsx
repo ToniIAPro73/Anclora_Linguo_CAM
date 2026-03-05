@@ -24,6 +24,12 @@ import ChatSidebar from './components/ChatSidebar';
 import VideoGrid from './components/VideoGrid';
 import ControlBar from './components/ControlBar';
 import SettingsModal from './components/SettingsModal';
+import {
+  buildInviteLink,
+  normalizeRoomCode,
+  shouldInitiateCall,
+  stopMediaStream,
+} from './utils/callSession';
 
 interface ChatMessage {
   id: string;
@@ -497,7 +503,7 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get(ROOM_QUERY_PARAM);
     if (room && !targetPeerId) {
-      setTargetPeerId(room.toUpperCase());
+      setTargetPeerId(normalizeRoomCode(room));
     }
   }, [targetPeerId]);
 
@@ -852,7 +858,8 @@ const App: React.FC = () => {
 
     try {
       const roomCode = targetPeerId.trim().toUpperCase();
-      const room = await waitForRoomPeer(roomCode);
+      const normalizedRoomCode = normalizeRoomCode(roomCode);
+      const room = await waitForRoomPeer(normalizedRoomCode);
       if (!room.target_peer_id || !room.initiator_peer_id) {
         throw new Error('room has no counterpart');
       }
@@ -869,7 +876,7 @@ const App: React.FC = () => {
 
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-      const shouldInitiate = room.initiator_peer_id === peerId;
+      const shouldInitiate = shouldInitiateCall(peerId, room.initiator_peer_id);
       if (!shouldInitiate) {
         setPreCallStatus(ui.waitingInRoom);
         setStatus(CallStatus.CONNECTING);
@@ -999,18 +1006,12 @@ const App: React.FC = () => {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
 
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current = null;
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-    }
-    if (remoteStreamRef.current) {
-      remoteStreamRef.current.getTracks().forEach((track) => track.stop());
-      remoteStreamRef.current = null;
-    }
+    stopMediaStream(cameraStreamRef.current);
+    cameraStreamRef.current = null;
+    stopMediaStream(screenStreamRef.current);
+    screenStreamRef.current = null;
+    stopMediaStream(remoteStreamRef.current);
+    remoteStreamRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -1169,7 +1170,7 @@ const App: React.FC = () => {
           }}
           onCopyInviteLink={() => {
             const room = targetPeerId || `ROOM-${peerId}`;
-            const url = `${window.location.origin}${window.location.pathname}?${ROOM_QUERY_PARAM}=${encodeURIComponent(room)}`;
+            const url = buildInviteLink(window.location.origin, window.location.pathname, room);
             navigator.clipboard.writeText(url);
             alert('Invite link copied.');
           }}

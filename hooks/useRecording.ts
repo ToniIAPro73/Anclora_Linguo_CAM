@@ -22,10 +22,37 @@ export function useRecording(options: RecordingOptions) {
     localSubtitle,
     remoteSubtitle,
   } = options;
+
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordingRequestRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mixedStreamRef = useRef<MediaStream | null>(null);
+  const canvasStreamRef = useRef<MediaStream | null>(null);
+
+  const cleanupRecordingResources = () => {
+    if (recordingRequestRef.current !== null) {
+      cancelAnimationFrame(recordingRequestRef.current);
+      recordingRequestRef.current = null;
+    }
+
+    if (canvasStreamRef.current) {
+      canvasStreamRef.current.getTracks().forEach((track) => track.stop());
+      canvasStreamRef.current = null;
+    }
+
+    if (mixedStreamRef.current) {
+      mixedStreamRef.current.getTracks().forEach((track) => track.stop());
+      mixedStreamRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+  };
 
   const startRecording = () => {
     const localStream = getLocalStream();
@@ -46,6 +73,7 @@ export function useRecording(options: RecordingOptions) {
     recordedChunksRef.current = [];
 
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioContextRef.current = audioCtx;
     const dest = audioCtx.createMediaStreamDestination();
 
     const localAudioSource = audioCtx.createMediaStreamSource(localStream);
@@ -54,8 +82,11 @@ export function useRecording(options: RecordingOptions) {
     localAudioSource.connect(dest);
     remoteAudioSource.connect(dest);
 
+    isRecordingRef.current = true;
+    setIsRecording(true);
+
     const drawFrame = () => {
-      if (!isRecording) return;
+      if (!isRecordingRef.current) return;
 
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -83,7 +114,13 @@ export function useRecording(options: RecordingOptions) {
         const textWidth = ctx.measureText(text).width;
 
         ctx.fillStyle = bgColor;
-        ctx.roundRect(canvas.width / 2 - textWidth / 2 - padding, yPos - 40, textWidth + padding * 2, 60, 10);
+        ctx.roundRect(
+          canvas.width / 2 - textWidth / 2 - padding,
+          yPos - 40,
+          textWidth + padding * 2,
+          60,
+          10,
+        );
         ctx.fill();
 
         ctx.fillStyle = 'white';
@@ -97,14 +134,12 @@ export function useRecording(options: RecordingOptions) {
       recordingRequestRef.current = requestAnimationFrame(drawFrame);
     };
 
-    setIsRecording(true);
-    requestAnimationFrame(drawFrame);
+    recordingRequestRef.current = requestAnimationFrame(drawFrame);
 
     const canvasStream = canvas.captureStream(30);
-    const finalStream = new MediaStream([
-      ...canvasStream.getVideoTracks(),
-      ...dest.stream.getAudioTracks(),
-    ]);
+    canvasStreamRef.current = canvasStream;
+    const finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    mixedStreamRef.current = finalStream;
 
     const recorder = new MediaRecorder(finalStream, { mimeType: 'video/webm;codecs=vp9,opus' });
 
@@ -120,6 +155,7 @@ export function useRecording(options: RecordingOptions) {
       anchor.download = `linguocam-call-${Date.now()}.webm`;
       anchor.click();
       URL.revokeObjectURL(url);
+      cleanupRecordingResources();
     };
 
     recorder.start();
@@ -127,15 +163,21 @@ export function useRecording(options: RecordingOptions) {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (recordingRequestRef.current) cancelAnimationFrame(recordingRequestRef.current);
+    isRecordingRef.current = false;
     setIsRecording(false);
+    const recorder = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+      return;
+    }
+
+    cleanupRecordingResources();
   };
 
   const toggleRecording = () => {
-    if (isRecording) {
+    if (isRecordingRef.current) {
       stopRecording();
     } else {
       startRecording();
