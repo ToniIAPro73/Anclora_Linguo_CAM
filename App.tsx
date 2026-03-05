@@ -53,6 +53,8 @@ interface ConsentResponse {
   consent_id: string;
 }
 
+type UiLocale = 'es' | 'en' | 'de' | 'ru' | 'fr' | 'it';
+
 const QUALITY_PROFILES: Record<string, QualityProfile> = {
   low: { label: 'Low (360p)', width: 640, height: 360, maxBitrate: 500000 },
   medium: { label: 'Medium (720p)', width: 1280, height: 720, maxBitrate: 1500000 },
@@ -60,6 +62,175 @@ const QUALITY_PROFILES: Record<string, QualityProfile> = {
 };
 
 const SESSION_STORAGE_KEY = 'anclora_linguo_session';
+const UI_LOCALE_STORAGE_KEY = 'anclora_linguo_ui_locale';
+
+const UI_LOCALE_OPTIONS: Array<{ code: UiLocale; label: string }> = [
+  { code: 'es', label: 'Español' },
+  { code: 'en', label: 'English' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'fr', label: 'Français' },
+  { code: 'it', label: 'Italiano' },
+];
+
+const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
+  es: {
+    appTitle: 'LinguoCam',
+    appSubtitle: 'Comunicación global, sin barreras.',
+    yourPeerId: 'Tu ID de Peer',
+    iSpeak: 'Yo hablo',
+    theySpeak: 'Ellos hablan',
+    callQuality: 'Calidad de llamada',
+    joinRoom: 'Unirse a sala',
+    joinRoomPlaceholder: 'Introduce el Peer ID para llamar...',
+    connecting: 'Conectando...',
+    startCall: 'Iniciar llamada con traducción',
+    copyHint: 'Pide a la otra persona su Peer ID para conectar.',
+    secureAccess: 'Acceso seguro',
+    secureAccessDesc: 'Cada llamada requiere participantes autenticados antes de conectar.',
+    name: 'Nombre',
+    namePlaceholder: 'Tu nombre completo',
+    role: 'Rol',
+    agent: 'Agente',
+    investor: 'Inversor',
+    creatingSession: 'Creando sesión...',
+    enterWorkspace: 'Entrar al workspace',
+    signOut: 'Cerrar sesión',
+    authNameError: 'Introduce tu nombre para continuar.',
+    authCreateError: 'No se pudo crear una sesión segura. Revisa la conexión con backend.',
+    validatingSession: 'Validando sesión segura...',
+  },
+  en: {
+    appTitle: 'LinguoCam',
+    appSubtitle: 'Global communication, zero barriers.',
+    yourPeerId: 'Your Peer ID',
+    iSpeak: 'I speak',
+    theySpeak: 'They speak',
+    callQuality: 'Call quality',
+    joinRoom: 'Join room',
+    joinRoomPlaceholder: 'Enter Peer ID to call...',
+    connecting: 'Connecting...',
+    startCall: 'Start translation call',
+    copyHint: 'Ask the other person for their Peer ID to connect.',
+    secureAccess: 'Secure access',
+    secureAccessDesc: 'Every call requires authenticated participants before connection.',
+    name: 'Name',
+    namePlaceholder: 'Your full name',
+    role: 'Role',
+    agent: 'Agent',
+    investor: 'Investor',
+    creatingSession: 'Creating session...',
+    enterWorkspace: 'Enter workspace',
+    signOut: 'Sign out',
+    authNameError: 'Enter your name to continue.',
+    authCreateError: 'Could not create a secure session. Check backend connectivity.',
+    validatingSession: 'Validating secure session...',
+  },
+  de: {
+    appTitle: 'LinguoCam',
+    appSubtitle: 'Globale Kommunikation ohne Barrieren.',
+    yourPeerId: 'Deine Peer-ID',
+    iSpeak: 'Ich spreche',
+    theySpeak: 'Sie sprechen',
+    callQuality: 'Anrufqualität',
+    joinRoom: 'Raum beitreten',
+    joinRoomPlaceholder: 'Peer-ID zum Anrufen eingeben...',
+    connecting: 'Verbinden...',
+    startCall: 'Übersetzungsanruf starten',
+    copyHint: 'Bitte die andere Person um ihre Peer-ID.',
+    secureAccess: 'Sicherer Zugang',
+    secureAccessDesc: 'Jeder Anruf erfordert authentifizierte Teilnehmer vor der Verbindung.',
+    name: 'Name',
+    namePlaceholder: 'Dein vollständiger Name',
+    role: 'Rolle',
+    agent: 'Agent',
+    investor: 'Investor',
+    creatingSession: 'Sitzung wird erstellt...',
+    enterWorkspace: 'Workspace betreten',
+    signOut: 'Abmelden',
+    authNameError: 'Bitte gib deinen Namen ein.',
+    authCreateError: 'Sichere Sitzung konnte nicht erstellt werden.',
+    validatingSession: 'Sichere Sitzung wird geprüft...',
+  },
+  ru: {
+    appTitle: 'LinguoCam',
+    appSubtitle: 'Глобальное общение без барьеров.',
+    yourPeerId: 'Ваш Peer ID',
+    iSpeak: 'Я говорю',
+    theySpeak: 'Они говорят',
+    callQuality: 'Качество звонка',
+    joinRoom: 'Войти в комнату',
+    joinRoomPlaceholder: 'Введите Peer ID для звонка...',
+    connecting: 'Подключение...',
+    startCall: 'Начать звонок с переводом',
+    copyHint: 'Попросите собеседника прислать Peer ID.',
+    secureAccess: 'Безопасный вход',
+    secureAccessDesc: 'Перед подключением все участники должны быть аутентифицированы.',
+    name: 'Имя',
+    namePlaceholder: 'Ваше полное имя',
+    role: 'Роль',
+    agent: 'Агент',
+    investor: 'Инвестор',
+    creatingSession: 'Создание сессии...',
+    enterWorkspace: 'Войти в workspace',
+    signOut: 'Выйти',
+    authNameError: 'Введите имя, чтобы продолжить.',
+    authCreateError: 'Не удалось создать безопасную сессию.',
+    validatingSession: 'Проверка защищенной сессии...',
+  },
+  fr: {
+    appTitle: 'LinguoCam',
+    appSubtitle: 'Communication mondiale, sans barrières.',
+    yourPeerId: 'Votre ID Peer',
+    iSpeak: 'Je parle',
+    theySpeak: 'Ils parlent',
+    callQuality: 'Qualité d’appel',
+    joinRoom: 'Rejoindre la salle',
+    joinRoomPlaceholder: 'Entrez le Peer ID pour appeler...',
+    connecting: 'Connexion...',
+    startCall: 'Démarrer l’appel traduit',
+    copyHint: 'Demandez le Peer ID de l’autre personne.',
+    secureAccess: 'Accès sécurisé',
+    secureAccessDesc: 'Chaque appel nécessite des participants authentifiés avant connexion.',
+    name: 'Nom',
+    namePlaceholder: 'Votre nom complet',
+    role: 'Rôle',
+    agent: 'Agent',
+    investor: 'Investisseur',
+    creatingSession: 'Création de session...',
+    enterWorkspace: 'Entrer dans le workspace',
+    signOut: 'Déconnexion',
+    authNameError: 'Entrez votre nom pour continuer.',
+    authCreateError: 'Impossible de créer une session sécurisée.',
+    validatingSession: 'Validation de la session sécurisée...',
+  },
+  it: {
+    appTitle: 'LinguoCam',
+    appSubtitle: 'Comunicazione globale, zero barriere.',
+    yourPeerId: 'Il tuo Peer ID',
+    iSpeak: 'Io parlo',
+    theySpeak: 'Loro parlano',
+    callQuality: 'Qualità chiamata',
+    joinRoom: 'Entra nella stanza',
+    joinRoomPlaceholder: 'Inserisci il Peer ID per chiamare...',
+    connecting: 'Connessione...',
+    startCall: 'Avvia chiamata tradotta',
+    copyHint: "Chiedi all'altra persona il suo Peer ID.",
+    secureAccess: 'Accesso sicuro',
+    secureAccessDesc: 'Ogni chiamata richiede partecipanti autenticati prima della connessione.',
+    name: 'Nome',
+    namePlaceholder: 'Il tuo nome completo',
+    role: 'Ruolo',
+    agent: 'Agente',
+    investor: 'Investitore',
+    creatingSession: 'Creazione sessione...',
+    enterWorkspace: 'Entra nel workspace',
+    signOut: 'Esci',
+    authNameError: 'Inserisci il tuo nome per continuare.',
+    authCreateError: 'Impossibile creare una sessione sicura.',
+    validatingSession: 'Verifica sessione sicura...',
+  },
+};
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<CallStatus>(CallStatus.IDLE);
@@ -89,6 +260,10 @@ const App: React.FC = () => {
   const [authRole, setAuthRole] = useState<'agent' | 'investor'>('agent');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [uiLocale, setUiLocale] = useState<UiLocale>(() => {
+    const stored = localStorage.getItem(UI_LOCALE_STORAGE_KEY) as UiLocale | null;
+    return stored && UI_TEXTS[stored] ? stored : 'es';
+  });
   const [peerConnectionState, setPeerConnectionState] = useState<'connected' | 'reconnecting' | 'down'>('connected');
   const [networkNotice, setNetworkNotice] = useState<string>('');
 
@@ -152,6 +327,7 @@ const App: React.FC = () => {
   const hasUnreadPeerMessages = !isChatOpen && messages.some((msg) => msg.sender === 'peer');
   const myLangName = SUPPORTED_LANGUAGES.find((l) => l.code === myLang)?.name || myLang;
   const remoteLangName = SUPPORTED_LANGUAGES.find((l) => l.code === remoteLang)?.name || remoteLang;
+  const ui = UI_TEXTS[uiLocale];
 
   const recording = useRecording({
     localVideoRef,
@@ -260,6 +436,10 @@ const App: React.FC = () => {
   }, [status]);
 
   useEffect(() => {
+    localStorage.setItem(UI_LOCALE_STORAGE_KEY, uiLocale);
+  }, [uiLocale]);
+
+  useEffect(() => {
     if (!HAS_TURN_SERVER) {
       setNetworkNotice(
         'TURN not configured. Calls may fail on restrictive NAT/firewall networks.',
@@ -343,7 +523,7 @@ const App: React.FC = () => {
     e.preventDefault();
     const cleanName = authName.trim();
     if (!cleanName) {
-      setAuthError('Enter your name to continue.');
+      setAuthError(ui.authNameError);
       return;
     }
 
@@ -365,7 +545,7 @@ const App: React.FC = () => {
       setSession(newSession);
     } catch (error) {
       console.error('Authentication failed:', error);
-      setAuthError('Could not create a secure session. Check backend connectivity.');
+      setAuthError(ui.authCreateError);
     } finally {
       setIsAuthenticating(false);
     }
@@ -730,40 +910,54 @@ const App: React.FC = () => {
   if (authLoading) {
     return (
       <div className="h-screen w-full bg-black text-white flex items-center justify-center">
-        <p className="text-zinc-400 text-sm">Validating secure session...</p>
+        <p className="text-zinc-400 text-sm">{ui.validatingSession}</p>
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-screen w-full bg-black text-white flex items-center justify-center px-6">
+      <div className="h-screen w-full bg-black text-white flex items-center justify-center px-6 relative">
+        <div className="absolute top-4 left-4 z-20">
+          <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
+            <i className="fas fa-globe text-zinc-300 text-xs"></i>
+            <select
+              value={uiLocale}
+              onChange={(e) => setUiLocale(e.target.value as UiLocale)}
+              className="bg-transparent text-zinc-200 text-sm outline-none"
+            >
+              {UI_LOCALE_OPTIONS.map((locale) => (
+                <option key={locale.code} value={locale.code} className="bg-zinc-900">
+                  {locale.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <form
           onSubmit={handleAuthenticate}
           className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4"
         >
-          <h1 className="text-2xl font-bold">Secure Access</h1>
-          <p className="text-sm text-zinc-400">
-            Every call requires authenticated participants before connection.
-          </p>
+          <h1 className="text-2xl font-bold">{ui.secureAccess}</h1>
+          <p className="text-sm text-zinc-400">{ui.secureAccessDesc}</p>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wide text-zinc-500">Name</label>
+            <label className="text-xs uppercase tracking-wide text-zinc-500">{ui.name}</label>
             <input
               value={authName}
               onChange={(e) => setAuthName(e.target.value)}
-              placeholder="Your full name"
+              placeholder={ui.namePlaceholder}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wide text-zinc-500">Role</label>
+            <label className="text-xs uppercase tracking-wide text-zinc-500">{ui.role}</label>
             <select
               value={authRole}
               onChange={(e) => setAuthRole(e.target.value as 'agent' | 'investor')}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
             >
-              <option value="agent">Agent</option>
-              <option value="investor">Investor</option>
+              <option value="agent">{ui.agent}</option>
+              <option value="investor">{ui.investor}</option>
             </select>
           </div>
           {authError ? <p className="text-sm text-red-400">{authError}</p> : null}
@@ -772,7 +966,7 @@ const App: React.FC = () => {
             disabled={isAuthenticating}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 rounded-lg py-2 font-semibold"
           >
-            {isAuthenticating ? 'Creating session...' : 'Enter workspace'}
+            {isAuthenticating ? ui.creatingSession : ui.enterWorkspace}
           </button>
         </form>
       </div>
@@ -782,11 +976,27 @@ const App: React.FC = () => {
   if (status === CallStatus.IDLE || status === CallStatus.CONNECTING) {
     return (
       <div className="relative">
+        <div className="absolute top-4 left-4 z-10">
+          <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
+            <i className="fas fa-globe text-zinc-300 text-xs"></i>
+            <select
+              value={uiLocale}
+              onChange={(e) => setUiLocale(e.target.value as UiLocale)}
+              className="bg-transparent text-zinc-200 text-sm outline-none"
+            >
+              {UI_LOCALE_OPTIONS.map((locale) => (
+                <option key={locale.code} value={locale.code} className="bg-zinc-900">
+                  {locale.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <button
           onClick={signOut}
           className="absolute top-4 right-4 z-10 bg-zinc-900 border border-zinc-700 text-xs px-3 py-2 rounded-lg text-zinc-300 hover:text-white"
         >
-          Sign out ({session.displayName})
+          {ui.signOut} ({session.displayName})
         </button>
         <CallSetup
           status={status}
@@ -805,6 +1015,19 @@ const App: React.FC = () => {
           onCopyPeerId={() => {
             navigator.clipboard.writeText(peerId);
             alert('Copied!');
+          }}
+          uiText={{
+            title: ui.appTitle,
+            subtitle: ui.appSubtitle,
+            yourPeerId: ui.yourPeerId,
+            iSpeak: ui.iSpeak,
+            theySpeak: ui.theySpeak,
+            callQuality: ui.callQuality,
+            joinRoom: ui.joinRoom,
+            joinRoomPlaceholder: ui.joinRoomPlaceholder,
+            connecting: ui.connecting,
+            startCall: ui.startCall,
+            copyHint: ui.copyHint,
           }}
         />
       </div>
