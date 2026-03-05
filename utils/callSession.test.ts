@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildInviteLink,
+  extractRoomCode,
   normalizeRoomCode,
   shouldInitiateCall,
   stopMediaStream,
@@ -16,6 +17,11 @@ describe('callSession utilities', () => {
     expect(buildInviteLink('https://demo.local', '/app', 'room a')).toBe(
       'https://demo.local/app?room=ROOMA',
     );
+  });
+
+  it('extracts room code from full invite url', () => {
+    expect(extractRoomCode('http://localhost:3000/?room=ROOM-AB12')).toBe('ROOM-AB12');
+    expect(extractRoomCode('https://demo.local/path?ROOM=room-x9')).toBe('ROOM-X9');
   });
 
   it('detects initiator peer', () => {

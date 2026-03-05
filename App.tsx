@@ -26,6 +26,7 @@ import ControlBar from './components/ControlBar';
 import SettingsModal from './components/SettingsModal';
 import {
   buildInviteLink,
+  extractRoomCode,
   normalizeRoomCode,
   shouldInitiateCall,
   stopMediaStream,
@@ -899,8 +900,7 @@ const App: React.FC = () => {
     setPreCallStatus('');
 
     try {
-      const roomCode = targetPeerId.trim().toUpperCase();
-      const normalizedRoomCode = normalizeRoomCode(roomCode);
+      const normalizedRoomCode = extractRoomCode(targetPeerId);
       const room = await waitForRoomPeer(normalizedRoomCode);
       if (!room.target_peer_id || !room.initiator_peer_id) {
         throw new Error('room has no counterpart');
@@ -1212,7 +1212,7 @@ const App: React.FC = () => {
           onQualityChange={handleQualityChange}
           onMyLangChange={setMyLang}
           onRemoteLangChange={setRemoteLang}
-          onTargetPeerChange={setTargetPeerId}
+          onTargetPeerChange={(value) => setTargetPeerId(extractRoomCode(value))}
           onCopyPeerId={() => {
             navigator.clipboard.writeText(peerId);
             alert('Copied!');
