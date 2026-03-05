@@ -40,3 +40,10 @@ export const ICE_SERVERS = (() => {
     return [{ urls: 'stun:stun.l.google.com:19302' }];
   }
 })();
+
+const toUrls = (entry: { urls: string | string[] }): string[] =>
+  Array.isArray(entry.urls) ? entry.urls : [entry.urls];
+
+export const HAS_TURN_SERVER = ICE_SERVERS.some((server) =>
+  toUrls(server).some((url) => url.startsWith('turn:') || url.startsWith('turns:')),
+);

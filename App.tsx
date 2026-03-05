@@ -12,6 +12,7 @@ import {
   PEER_SERVER_PATH,
   PEER_SERVER_SECURE,
   ICE_SERVERS,
+  HAS_TURN_SERVER,
 } from './constants';
 import { CallStatus } from './types';
 import { useWebRtcStats } from './hooks/useWebRtcStats';
@@ -88,6 +89,8 @@ const App: React.FC = () => {
   const [authRole, setAuthRole] = useState<'agent' | 'investor'>('agent');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [peerConnectionState, setPeerConnectionState] = useState<'connected' | 'reconnecting' | 'down'>('connected');
+  const [networkNotice, setNetworkNotice] = useState<string>('');
 
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [recordingConsentGranted, setRecordingConsentGranted] = useState(false);
@@ -107,6 +110,8 @@ const App: React.FC = () => {
   const qualityRef = useRef(quality);
   const remoteVolumeRef = useRef(remoteVolume);
   const sessionRef = useRef<SessionInfo | null>(null);
+  const statusRef = useRef<CallStatus>(status);
+  const resetCallStateRef = useRef<() => void>(() => undefined);
 
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
@@ -135,7 +140,14 @@ const App: React.FC = () => {
     },
   });
 
-  const { latencyMs, setSendActive, start: startStreaming, stop: stopStreaming } = streaming;
+  const {
+    latencyMs,
+    connectionState: translationConnectionState,
+    reconnectAttempts: translationReconnectAttempts,
+    setSendActive,
+    start: startStreaming,
+    stop: stopStreaming,
+  } = streaming;
 
   const hasUnreadPeerMessages = !isChatOpen && messages.some((msg) => msg.sender === 'peer');
   const myLangName = SUPPORTED_LANGUAGES.find((l) => l.code === myLang)?.name || myLang;
@@ -166,6 +178,10 @@ const App: React.FC = () => {
   }, []);
 
   const setupDataChannel = useCallback((conn: any) => {
+    conn.on('open', () => {
+      setNetworkNotice('');
+    });
+
     conn.on('data', (data: any) => {
       if (data.type === 'subtitle') {
         setRemoteSubtitle(data.text);
@@ -181,16 +197,36 @@ const App: React.FC = () => {
         setIsChatOpen(true);
       }
     });
+
+    conn.on('close', () => {
+      if (statusRef.current === CallStatus.ACTIVE) {
+        setNetworkNotice('Data channel closed. Chat/subtitles sync may be limited.');
+      }
+    });
+
+    conn.on('error', () => {
+      if (statusRef.current === CallStatus.ACTIVE) {
+        setNetworkNotice('Data channel error detected.');
+      }
+    });
   }, []);
 
   const handleCall = useCallback((call: any, stream: MediaStream) => {
     setStatus(CallStatus.ACTIVE);
+    setNetworkNotice('');
     call.on('stream', (remoteStream: MediaStream) => {
       remoteStreamRef.current = remoteStream;
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStream;
         remoteVideoRef.current.volume = remoteVolumeRef.current;
       }
+    });
+    call.on('close', () => {
+      setNetworkNotice('Call ended or dropped.');
+      resetCallStateRef.current();
+    });
+    call.on('error', () => {
+      setNetworkNotice('Call transport error. Trying to recover.');
     });
     streamingStartRef.current(stream);
   }, []);
@@ -218,6 +254,35 @@ const App: React.FC = () => {
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    if (!HAS_TURN_SERVER) {
+      setNetworkNotice(
+        'TURN not configured. Calls may fail on restrictive NAT/firewall networks.',
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status !== CallStatus.ACTIVE) return;
+    if (translationConnectionState === 'reconnecting') {
+      setNetworkNotice(
+        `Translation stream reconnecting (attempt ${translationReconnectAttempts}/${5})...`,
+      );
+      return;
+    }
+    if (translationConnectionState === 'error') {
+      setNetworkNotice('Translation stream disconnected. Subtitles may be delayed.');
+      return;
+    }
+    if (translationConnectionState === 'connected') {
+      setNetworkNotice('');
+    }
+  }, [status, translationConnectionState, translationReconnectAttempts]);
 
   const recordingStopRef = useRef(recording.stopRecording);
   const streamingStartRef = useRef(startStreaming);
@@ -318,6 +383,7 @@ const App: React.FC = () => {
 
     peer.on('open', (id: string) => {
       setPeerId(id);
+      setPeerConnectionState('connected');
       console.log(`My peer ID is: ${id}`);
     });
 
@@ -355,8 +421,20 @@ const App: React.FC = () => {
 
     peer.on('error', (err: any) => {
       console.error('PeerJS error:', err);
-      setStatus(CallStatus.IDLE);
-      alert(`Connection error: ${err.type}`);
+      setPeerConnectionState('down');
+      if (statusRef.current === CallStatus.ACTIVE) {
+        setNetworkNotice(`Peer connection error: ${err.type}. Attempting recovery.`);
+      }
+    });
+
+    peer.on('disconnected', () => {
+      setPeerConnectionState('reconnecting');
+      setNetworkNotice('Signaling disconnected. Reconnecting...');
+      peer.reconnect();
+    });
+
+    peer.on('close', () => {
+      setPeerConnectionState('down');
     });
 
     peerRef.current = peer;
@@ -444,6 +522,9 @@ const App: React.FC = () => {
 
   const initiateCall = async () => {
     if (!session) return alert('Authenticate before starting calls.');
+    if (peerConnectionState !== 'connected') {
+      return alert('Signaling is reconnecting. Wait a moment and try again.');
+    }
     if (!targetPeerId) return alert('Enter a Peer ID to call');
     if (targetPeerId === peerId) {
       return alert("You cannot call yourself. Please ask for the other person's Peer ID.");
@@ -570,7 +651,7 @@ const App: React.FC = () => {
     }
   };
 
-  const resetCallState = () => {
+  const resetCallState = useCallback(() => {
     setStatus(CallStatus.IDLE);
     setIsScreenSharing(false);
     setIsPttPressed(false);
@@ -599,7 +680,11 @@ const App: React.FC = () => {
       remoteStreamRef.current.getTracks().forEach((track) => track.stop());
       remoteStreamRef.current = null;
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    resetCallStateRef.current = resetCallState;
+  }, [resetCallState]);
 
   const endCall = () => {
     if (isRecording) recording.stopRecording();
@@ -742,7 +827,16 @@ const App: React.FC = () => {
         latencyMs={latencyMs}
         bitrateKbps={webrtcStats.bitrateKbps}
         packetLossPct={webrtcStats.packetLossPct}
+        peerConnectionState={peerConnectionState}
+        translationConnectionState={translationConnectionState}
+        translationReconnectAttempts={translationReconnectAttempts}
       />
+
+      {networkNotice ? (
+        <div className="absolute top-24 left-6 z-50 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+          {networkNotice}
+        </div>
+      ) : null}
 
       <div className="flex-1 min-h-0 relative flex">
         <div className="flex-1 p-4 md:p-6 min-h-0">

@@ -7,6 +7,9 @@ interface CallHeaderProps {
   latencyMs: number | null;
   bitrateKbps: number | null;
   packetLossPct: number | null;
+  peerConnectionState: 'connected' | 'reconnecting' | 'down';
+  translationConnectionState: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+  translationReconnectAttempts: number;
 }
 
 const CallHeader: React.FC<CallHeaderProps> = ({
@@ -16,7 +19,26 @@ const CallHeader: React.FC<CallHeaderProps> = ({
   latencyMs,
   bitrateKbps,
   packetLossPct,
+  peerConnectionState,
+  translationConnectionState,
+  translationReconnectAttempts,
 }) => {
+  const peerStateColor =
+    peerConnectionState === 'connected'
+      ? 'text-green-400 border-green-500/20 bg-green-500/10'
+      : peerConnectionState === 'reconnecting'
+        ? 'text-amber-300 border-amber-500/20 bg-amber-500/10'
+        : 'text-red-400 border-red-500/20 bg-red-500/10';
+
+  const translationStateColor =
+    translationConnectionState === 'connected'
+      ? 'text-blue-300 border-blue-500/20 bg-blue-500/10'
+      : translationConnectionState === 'reconnecting'
+        ? 'text-amber-300 border-amber-500/20 bg-amber-500/10'
+        : translationConnectionState === 'error'
+          ? 'text-red-400 border-red-500/20 bg-red-500/10'
+          : 'text-zinc-300 border-zinc-500/20 bg-zinc-500/10';
+
   return (
     <>
       <div className="absolute top-6 left-6 z-50 flex items-center gap-4 bg-black/40 backdrop-blur-md p-2 rounded-2xl border border-white/10">
@@ -37,6 +59,15 @@ const CallHeader: React.FC<CallHeaderProps> = ({
         <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-300 text-[10px] font-bold tracking-widest flex items-center gap-2">
           <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
           LAT {latencyMs ?? '--'}ms | {bitrateKbps ?? '--'}kbps | LOSS {packetLossPct ?? '--'}%
+        </div>
+        <div className={`px-4 py-2 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-2 border ${peerStateColor}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+          SIGNAL {peerConnectionState.toUpperCase()}
+        </div>
+        <div className={`px-4 py-2 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-2 border ${translationStateColor}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+          SUBTITLES {translationConnectionState.toUpperCase()}
+          {translationConnectionState === 'reconnecting' ? ` #${translationReconnectAttempts}` : ''}
         </div>
         {isRecording && (
           <div className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-full text-red-400 text-[10px] font-bold tracking-widest flex items-center gap-2 animate-pulse">

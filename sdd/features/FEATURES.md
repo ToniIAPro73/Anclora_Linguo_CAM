@@ -9,7 +9,7 @@ Registro centralizado de features priorizadas segun docs/analisis-completo-anclo
 
 ## 2. Call Reliability and Network Resilience (CRITICA)
 - ID: ALC-CRN-001
-- Estado: Planned
+- Estado: Implemented (v1)
 - Carpeta: sdd/features/call-reliability-and-network-resilience/
 
 ## 3. Translation Architecture and Cost Governance (ALTA)
