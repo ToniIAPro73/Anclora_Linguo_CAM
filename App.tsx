@@ -425,6 +425,7 @@ const App: React.FC = () => {
   const hypothesisSentRef = useRef(0);
   const hypothesisDroppedRef = useRef(0);
   const endpointProfileRef = useRef<'normal' | 'aggressive'>('normal');
+  const chunkProfileRef = useRef<'fast' | 'normal' | 'stable'>('normal');
 
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
@@ -854,6 +855,49 @@ const App: React.FC = () => {
       packet_loss_pct: lossPct,
     });
   }, [
+    setEndpointingConfig,
+    status,
+    webrtcStats.jitterMs,
+    webrtcStats.packetLossPct,
+  ]);
+
+  useEffect(() => {
+    if (status !== CallStatus.ACTIVE) return;
+    const jitterMs = webrtcStats.jitterMs ?? 0;
+    const lossPct = webrtcStats.packetLossPct ?? 0;
+    const lagMs = latencyMs ?? 0;
+
+    let nextProfile: 'fast' | 'normal' | 'stable' = 'normal';
+    if (lossPct >= 4 || jitterMs >= 45 || lagMs >= 1500) {
+      nextProfile = 'stable';
+    } else if (lossPct <= 1 && jitterMs <= 20 && lagMs > 0 && lagMs <= 800) {
+      nextProfile = 'fast';
+    }
+    if (chunkProfileRef.current === nextProfile) return;
+    chunkProfileRef.current = nextProfile;
+
+    if (nextProfile === 'fast') {
+      setEndpointingConfig({ chunkSize: 240 });
+    } else if (nextProfile === 'stable') {
+      setEndpointingConfig({ chunkSize: 480 });
+    } else {
+      setEndpointingConfig({ chunkSize: AUDIO_CHUNK_FRAMES });
+    }
+
+    trackTelemetryRef.current('audio_chunk_profile_changed', {
+      profile: nextProfile,
+      chunk_frames:
+        nextProfile === 'fast'
+          ? 240
+          : nextProfile === 'stable'
+            ? 480
+            : AUDIO_CHUNK_FRAMES,
+      jitter_ms: jitterMs,
+      packet_loss_pct: lossPct,
+      subtitle_latency_ms: lagMs || null,
+    });
+  }, [
+    latencyMs,
     setEndpointingConfig,
     status,
     webrtcStats.jitterMs,

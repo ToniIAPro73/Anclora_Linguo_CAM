@@ -13,6 +13,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - endpoint backend para TTS logical flow (`/api/chat/tts`),
   - cache de traducciones en backend,
   - micro-batching de traducciones parciales en WS para reducir inferencias MT,
+  - smart chunking adaptativo de audio (`fast/normal/stable`) segun jitter/perdida/latencia,
   - cuotas por sesion para traduccion y TTS,
   - endpoint de consumo de sesion (`/api/sessions/usage`),
   - UI con consumo de cuota en llamada,
@@ -47,14 +48,18 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - `speakMessage` migra a `POST /api/chat/tts`.
   - refresco de consumo de cuota despues de traducir/hablar.
   - estabilizacion de subtitulos con `confirmed_text + hypothesis_text`.
+  - ajuste dinamico de `chunkSize` del AudioWorklet en llamada activa.
 - `components/VideoGrid.tsx`
   - render diferenciado de hipotesis (tenue) y texto confirmado.
+- `audio-worklet-processor.js`
+  - permite reconfigurar `chunkSize` en caliente sin reiniciar stream.
 
 ## 5. Seguridad y coste
 - Traduccion/TTS pasan por backend autenticado con token firmado.
 - Cuotas por sesion impiden consumo ilimitado.
 - Cache reduce coste y latencia para textos repetidos.
 - Micro-batching reduce coste CPU en rachas de parciales seguidos.
+- Chunking adaptativo evita backlog en red degradada y reduce TTFC cuando la red es estable.
 
 ## 6. Criterios de aceptacion
 - [x] TTS chat usa backend y no SDK cliente.
@@ -62,5 +67,6 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - [x] UI muestra consumo de sesion.
 - [x] Ruta ASR se puede elegir por entorno (`streaming` o `quality`).
 - [x] Backend MT soporta micro-batching configurable para parciales WS.
+- [x] Smart chunking de audio se adapta en runtime sin reiniciar llamada.
 - [x] Variables de entorno y README actualizados.
 - [x] `npm run lint` y `npm run build` en verde.

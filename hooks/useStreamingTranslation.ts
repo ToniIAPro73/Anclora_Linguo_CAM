@@ -337,6 +337,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
   }, [start, stop]);
 
   const setEndpointingConfig = useCallback((config: {
+    chunkSize?: number;
     minSpeechMs?: number;
     minSilenceMs?: number;
     maxSegmentMs?: number;

@@ -42,6 +42,10 @@
 - Configurar `MT_MICRO_BATCH_WINDOW_MS=0`.
 - Esperado: cada parcial se traduce/publica inmediatamente (sin agrupacion temporal).
 
+10. Smart chunking adaptativo
+- Durante llamada, forzar condiciones de red mala (perdida/jitter) y luego red estable.
+- Esperado: evento `audio_chunk_profile_changed` cambia entre `stable`/`normal`/`fast` y el stream no se reinicia.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

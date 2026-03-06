@@ -22,6 +22,14 @@ class PCMWorkletProcessor extends AudioWorkletProcessor {
         this.active = !!event.data.active;
       }
       if (event.data?.type === "config") {
+        if (typeof event.data.chunkSize === "number") {
+          const nextChunkSize = Math.max(160, Math.min(960, Math.round(event.data.chunkSize)));
+          if (nextChunkSize !== this.chunkSize) {
+            this.chunkSize = nextChunkSize;
+            this.buffer = new Float32Array(this.chunkSize);
+            this.bufferIndex = 0;
+          }
+        }
         if (typeof event.data.vadThreshold === "number") {
           this.vadThreshold = event.data.vadThreshold;
         }
