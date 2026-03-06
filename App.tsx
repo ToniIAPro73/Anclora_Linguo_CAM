@@ -11,6 +11,8 @@ import {
   VAD_MIN_SILENCE_MS,
   VAD_MAX_SEGMENT_MS,
   VAD_HANGOVER_MS,
+  CALL_TOPOLOGY,
+  SFU_JOIN_URL,
   PEER_SERVER_HOST,
   PEER_SERVER_PORT,
   PEER_SERVER_PATH,
@@ -817,6 +819,10 @@ const App: React.FC = () => {
   }, [peerId, targetPeerId]);
 
   useEffect(() => {
+    if (CALL_TOPOLOGY === 'sfu') {
+      setNetworkNotice('SFU topology enabled: call join redirects to external SFU room.');
+      return;
+    }
     if (!HAS_TURN_SERVER) {
       setNetworkNotice(
         'TURN not configured. Calls may fail on restrictive NAT/firewall networks.',
@@ -1557,6 +1563,17 @@ const App: React.FC = () => {
 
   const initiateCall = async () => {
     if (!session) return alert('Authenticate before starting calls.');
+    if (CALL_TOPOLOGY === 'sfu') {
+      const normalizedRoomCode = extractRoomCode(targetPeerId || `ROOM-${peerId}`);
+      if (!SFU_JOIN_URL) {
+        alert('SFU mode is enabled but VITE_SFU_JOIN_URL is not configured.');
+        return;
+      }
+      const joinUrl = `${SFU_JOIN_URL}${SFU_JOIN_URL.includes('?') ? '&' : '?'}room=${encodeURIComponent(normalizedRoomCode)}&name=${encodeURIComponent(session.displayName)}`;
+      trackTelemetry('sfu_redirect', { room_code: normalizedRoomCode, topology: 'sfu' });
+      window.open(joinUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     if (peerConnectionState !== 'connected') {
       return alert('Signaling is reconnecting. Wait a moment and try again.');
     }

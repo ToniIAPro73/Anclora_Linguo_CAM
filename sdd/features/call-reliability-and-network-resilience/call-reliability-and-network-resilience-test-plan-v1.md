@@ -39,6 +39,10 @@
 - Simular perdida/jitter alto y observar telemetria `endpointing_profile_changed`.
 - Verificar cambio a perfil `aggressive` y menor tiempo hasta commit final.
 
+9. Modo SFU por feature flag
+- Configurar `VITE_CALL_TOPOLOGY=sfu` y `VITE_SFU_JOIN_URL` valido.
+- Verificar que iniciar llamada abre URL SFU con `room` y `name` en query.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

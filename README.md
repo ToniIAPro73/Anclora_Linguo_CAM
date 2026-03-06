@@ -26,3 +26,4 @@ Notes:
 - No LLM API key is required in frontend.
 - For production-like reliability, configure TURN in `VITE_ICE_SERVERS`.
 - Call onboarding now supports room links (`?room=ROOM-CODE`) and built-in pre-call check.
+- Optional SFU handoff mode: set `VITE_CALL_TOPOLOGY=sfu` and `VITE_SFU_JOIN_URL=https://your-sfu.example/join`.
