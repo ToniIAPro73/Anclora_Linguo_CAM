@@ -99,6 +99,7 @@ const QUALITY_PROFILES: Record<string, QualityProfile> = {
 
 const SESSION_STORAGE_KEY = 'anclora_linguo_session';
 const UI_LOCALE_STORAGE_KEY = 'anclora_linguo_ui_locale';
+const SHOW_HYPOTHESIS_STORAGE_KEY = 'anclora_show_hypothesis_subtitles';
 const ROOM_QUERY_PARAM = 'room';
 
 const UI_LOCALE_OPTIONS: Array<{ code: UiLocale; label: string }> = [
@@ -380,6 +381,11 @@ const App: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHypothesisSubtitles, setShowHypothesisSubtitles] = useState<boolean>(() => {
+    const stored = localStorage.getItem(SHOW_HYPOTHESIS_STORAGE_KEY);
+    if (stored === null) return true;
+    return stored !== 'false';
+  });
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [translatingMessageId, setTranslatingMessageId] = useState<string | null>(null);
 
@@ -834,6 +840,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(UI_LOCALE_STORAGE_KEY, uiLocale);
   }, [uiLocale]);
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_HYPOTHESIS_STORAGE_KEY, showHypothesisSubtitles ? 'true' : 'false');
+  }, [showHypothesisSubtitles]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1850,6 +1860,12 @@ const App: React.FC = () => {
     }
   };
 
+  const toggleHypothesisVisibility = () => {
+    const next = !showHypothesisSubtitles;
+    setShowHypothesisSubtitles(next);
+    trackTelemetry('caption_hypothesis_visibility', { visible: next });
+  };
+
   const handlePttDown = () => {
     if (isHandsFree) return;
     setIsPttPressed(true);
@@ -2050,6 +2066,7 @@ const App: React.FC = () => {
             isScreenSharing={isScreenSharing}
             isPttPressed={isPttPressed}
             isHandsFree={isHandsFree}
+            showHypothesis={showHypothesisSubtitles}
           />
         </div>
 
@@ -2074,8 +2091,10 @@ const App: React.FC = () => {
       <SettingsModal
         show={showSettings}
         quality={quality}
+        showHypothesis={showHypothesisSubtitles}
         qualityProfiles={QUALITY_PROFILES}
         onSelectQuality={handleQualityChange}
+        onToggleHypothesis={toggleHypothesisVisibility}
         onClose={() => setShowSettings(false)}
       />
 

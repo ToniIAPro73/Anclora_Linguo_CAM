@@ -10,6 +10,7 @@ interface VideoGridProps {
   isScreenSharing: boolean;
   isPttPressed: boolean;
   isHandsFree: boolean;
+  showHypothesis: boolean;
 }
 
 const VideoGrid: React.FC<VideoGridProps> = ({
@@ -22,6 +23,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   isScreenSharing,
   isPttPressed,
   isHandsFree,
+  showHypothesis,
 }) => {
   return (
     <div className="video-grid">
@@ -34,7 +36,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
             <div className="subtitle-bubble">
               <p className="text-xl md:text-3xl font-bold text-white tracking-wide text-center leading-tight">
                 <span>{remoteSubtitleConfirmed}</span>
-                {remoteSubtitleHypothesis ? (
+                {showHypothesis && remoteSubtitleHypothesis ? (
                   <span className="opacity-60 ml-2">{remoteSubtitleHypothesis}</span>
                 ) : null}
               </p>
@@ -60,7 +62,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
             <div className="subtitle-bubble opacity-60 scale-90">
               <p className="text-lg font-bold text-white tracking-wide text-center">
                 <span>{localSubtitleConfirmed}</span>
-                {localSubtitleHypothesis ? (
+                {showHypothesis && localSubtitleHypothesis ? (
                   <span className="opacity-60 ml-2">{localSubtitleHypothesis}</span>
                 ) : null}
               </p>

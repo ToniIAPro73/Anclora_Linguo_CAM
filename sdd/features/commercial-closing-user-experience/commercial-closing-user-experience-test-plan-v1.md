@@ -30,6 +30,10 @@
 - Exportar VTT y SRT desde chat sidebar.
 - Verificar etiquetas de speaker y timestamps en ambos archivos.
 
+6. Toggle de hipotesis
+- Abrir `Settings` y desactivar `Caption Preview`.
+- Verificar que en `VideoGrid` solo se renderiza texto confirmado.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

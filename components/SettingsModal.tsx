@@ -10,16 +10,20 @@ interface QualityProfile {
 interface SettingsModalProps {
   show: boolean;
   quality: string;
+  showHypothesis: boolean;
   qualityProfiles: Record<string, QualityProfile>;
   onSelectQuality: (quality: string) => void;
+  onToggleHypothesis: () => void;
   onClose: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
   show,
   quality,
+  showHypothesis,
   qualityProfiles,
   onSelectQuality,
+  onToggleHypothesis,
   onClose,
 }) => {
   if (!show) return null;
@@ -49,6 +53,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase text-zinc-400">Caption Preview</p>
+              <p className="text-xs text-zinc-500">Show provisional hypothesis text</p>
+            </div>
+            <button
+              onClick={onToggleHypothesis}
+              className={`w-14 h-8 rounded-full p-1 transition-colors ${
+                showHypothesis ? 'bg-blue-600' : 'bg-zinc-700'
+              }`}
+              aria-pressed={showHypothesis}
+            >
+              <span
+                className={`block h-6 w-6 rounded-full bg-white transition-transform ${
+                  showHypothesis ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
         </div>
 
