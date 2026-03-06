@@ -6,6 +6,8 @@ import hmac
 import json
 import logging
 import os
+import sqlite3
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -51,6 +53,9 @@ ROOM_PARTICIPANT_TTL_SECONDS = int(os.getenv("ROOM_PARTICIPANT_TTL_SECONDS", "18
 ROOM_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {}
 MAX_TELEMETRY_EVENTS_PER_SESSION = int(os.getenv("MAX_TELEMETRY_EVENTS_PER_SESSION", "500"))
 TELEMETRY_EVENTS: dict[str, list[dict[str, Any]]] = {}
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").strip().lower()
+SQLITE_DB_PATH = Path(os.getenv("SQLITE_DB_PATH", "runtime/asr-mt.sqlite3"))
+SQLITE_LOCK = threading.Lock()
 
 
 def _b64url(data: bytes) -> str:
@@ -96,6 +101,58 @@ def _append_audit_event(event_type: str, payload: dict[str, Any]) -> None:
     }
     with AUDIT_LOG_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(line, ensure_ascii=True) + "\n")
+
+
+def _sqlite_conn() -> sqlite3.Connection:
+    SQLITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _init_sqlite_storage() -> None:
+    if STORAGE_BACKEND != "sqlite":
+        return
+    with SQLITE_LOCK:
+        with _sqlite_conn() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS room_presence (
+                    room_code TEXT NOT NULL,
+                    peer_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    last_seen INTEGER NOT NULL,
+                    PRIMARY KEY (room_code, peer_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS telemetry_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    call_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    timestamp_ms INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_telemetry_user_id
+                ON telemetry_events(user_id)
+                """
+            )
+            conn.commit()
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    if STORAGE_BACKEND not in {"memory", "sqlite"}:
+        raise RuntimeError(f"Unsupported STORAGE_BACKEND={STORAGE_BACKEND}")
+    _init_sqlite_storage()
 
 
 class ConfigMessage(BaseModel):
@@ -261,6 +318,17 @@ def _normalize_room_code(room_code: str) -> str:
 
 
 def _cleanup_room(room_code: str) -> None:
+    if STORAGE_BACKEND == "sqlite":
+        threshold = int(time.time()) - ROOM_PARTICIPANT_TTL_SECONDS
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                conn.execute(
+                    "DELETE FROM room_presence WHERE room_code = ? AND last_seen < ?",
+                    (room_code, threshold),
+                )
+                conn.commit()
+        return
+
     room = ROOM_REGISTRY.get(room_code)
     if room is None:
         return
@@ -277,11 +345,160 @@ def _cleanup_room(room_code: str) -> None:
 
 
 def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
+    if STORAGE_BACKEND == "sqlite":
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT call_id, event_type, timestamp_ms, payload_json
+                    FROM telemetry_events
+                    WHERE user_id = ?
+                    ORDER BY id ASC
+                    LIMIT ?
+                    """,
+                    (user_id, MAX_TELEMETRY_EVENTS_PER_SESSION),
+                ).fetchall()
+        return [
+            {
+                "call_id": row["call_id"],
+                "type": row["event_type"],
+                "timestamp_ms": row["timestamp_ms"],
+                "payload": json.loads(row["payload_json"]),
+            }
+            for row in rows
+        ]
+
     bucket = TELEMETRY_EVENTS.get(user_id)
     if bucket is None:
         bucket = []
         TELEMETRY_EVENTS[user_id] = bucket
     return bucket
+
+
+def _upsert_room_presence(
+    room_code: str,
+    peer_id: str,
+    user_id: str,
+    display_name: str,
+) -> int:
+    if STORAGE_BACKEND == "sqlite":
+        now = int(time.time())
+        threshold = now - ROOM_PARTICIPANT_TTL_SECONDS
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                conn.execute(
+                    "DELETE FROM room_presence WHERE room_code = ? AND last_seen < ?",
+                    (room_code, threshold),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO room_presence (room_code, peer_id, user_id, display_name, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(room_code, peer_id) DO UPDATE SET
+                      user_id=excluded.user_id,
+                      display_name=excluded.display_name,
+                      last_seen=excluded.last_seen
+                    """,
+                    (room_code, peer_id, user_id, display_name, now),
+                )
+                participants = conn.execute(
+                    "SELECT COUNT(*) AS count FROM room_presence WHERE room_code = ?",
+                    (room_code,),
+                ).fetchone()["count"]
+                conn.commit()
+        return int(participants)
+
+    room = ROOM_REGISTRY.setdefault(room_code, {})
+    room[peer_id] = {
+        "user_id": user_id,
+        "display_name": display_name,
+        "last_seen": int(time.time()),
+    }
+    _cleanup_room(room_code)
+    return len(ROOM_REGISTRY.get(room_code, {}))
+
+
+def _resolve_room_participants(room_code: str, requester_peer_id: str) -> RoomResolveResponse:
+    if STORAGE_BACKEND == "sqlite":
+        threshold = int(time.time()) - ROOM_PARTICIPANT_TTL_SECONDS
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                conn.execute(
+                    "DELETE FROM room_presence WHERE room_code = ? AND last_seen < ?",
+                    (room_code, threshold),
+                )
+                rows = conn.execute(
+                    """
+                    SELECT peer_id
+                    FROM room_presence
+                    WHERE room_code = ?
+                    ORDER BY peer_id ASC
+                    """,
+                    (room_code,),
+                ).fetchall()
+                conn.commit()
+        participant_peer_ids = [row["peer_id"] for row in rows]
+    else:
+        _cleanup_room(room_code)
+        room = ROOM_REGISTRY.get(room_code, {})
+        participant_peer_ids = sorted(room.keys())
+
+    target_peer_id = next(
+        (peer for peer in participant_peer_ids if peer != requester_peer_id), None
+    )
+    initiator_peer_id = participant_peer_ids[0] if len(participant_peer_ids) >= 2 else None
+    return RoomResolveResponse(
+        room_code=room_code,
+        participants=len(participant_peer_ids),
+        target_peer_id=target_peer_id,
+        initiator_peer_id=initiator_peer_id,
+    )
+
+
+def _append_telemetry_event(
+    user_id: str,
+    call_id: str,
+    event_type: str,
+    timestamp_ms: int,
+    payload: dict[str, Any],
+) -> bool:
+    if STORAGE_BACKEND == "sqlite":
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                current_count = conn.execute(
+                    "SELECT COUNT(*) AS count FROM telemetry_events WHERE user_id = ?",
+                    (user_id,),
+                ).fetchone()["count"]
+                if int(current_count) >= MAX_TELEMETRY_EVENTS_PER_SESSION:
+                    return False
+                conn.execute(
+                    """
+                    INSERT INTO telemetry_events (user_id, call_id, event_type, timestamp_ms, payload_json)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        call_id,
+                        event_type,
+                        timestamp_ms,
+                        json.dumps(payload, ensure_ascii=True),
+                    ),
+                )
+                conn.commit()
+        return True
+
+    bucket = _telemetry_bucket(user_id)
+    if len(bucket) >= MAX_TELEMETRY_EVENTS_PER_SESSION:
+        return False
+    bucket.append(
+        {
+            "call_id": call_id,
+            "type": event_type,
+            "timestamp_ms": timestamp_ms,
+            "payload": payload,
+        }
+    )
+    return True
 
 
 def _percentile(values: list[int], p: int) -> Optional[int]:
@@ -419,61 +636,45 @@ async def register_room(payload: RoomRegisterRequest) -> RoomRegisterResponse:
     if len(room_code) < 4:
         raise HTTPException(status_code=400, detail="room code too short")
 
-    room = ROOM_REGISTRY.setdefault(room_code, {})
-    room[payload.peer_id] = {
-        "user_id": session["user_id"],
-        "display_name": session["display_name"],
-        "last_seen": int(time.time()),
-    }
-    _cleanup_room(room_code)
+    participants = _upsert_room_presence(
+        room_code=room_code,
+        peer_id=payload.peer_id,
+        user_id=session["user_id"],
+        display_name=session["display_name"],
+    )
     _append_audit_event(
         "room_registered",
         {
             "room_code": room_code,
             "peer_id": payload.peer_id,
             "user_id": session["user_id"],
-            "participants": len(ROOM_REGISTRY.get(room_code, {})),
+            "participants": participants,
         },
     )
-    return RoomRegisterResponse(
-        status="ok", room_code=room_code, participants=len(ROOM_REGISTRY.get(room_code, {}))
-    )
+    return RoomRegisterResponse(status="ok", room_code=room_code, participants=participants)
 
 
 @app.post("/api/rooms/resolve", response_model=RoomResolveResponse)
 async def resolve_room(payload: RoomResolveRequest) -> RoomResolveResponse:
     _validate_token(payload.token)
     room_code = _normalize_room_code(payload.room_code)
-    _cleanup_room(room_code)
-    room = ROOM_REGISTRY.get(room_code, {})
-    participant_peer_ids = sorted(room.keys())
-    target_peer_id = next(
-        (peer for peer in participant_peer_ids if peer != payload.requester_peer_id), None
-    )
-    initiator_peer_id = participant_peer_ids[0] if len(participant_peer_ids) >= 2 else None
-    return RoomResolveResponse(
-        room_code=room_code,
-        participants=len(participant_peer_ids),
-        target_peer_id=target_peer_id,
-        initiator_peer_id=initiator_peer_id,
-    )
+    return _resolve_room_participants(room_code, payload.requester_peer_id)
 
 
 @app.post("/api/telemetry/events", response_model=TelemetryBatchResponse)
 async def ingest_telemetry(payload: TelemetryBatchRequest) -> TelemetryBatchResponse:
     session = _validate_token(payload.token)
-    bucket = _telemetry_bucket(session["user_id"])
     accepted = 0
     for event in payload.events:
-        if len(bucket) >= MAX_TELEMETRY_EVENTS_PER_SESSION:
+        accepted_event = _append_telemetry_event(
+            user_id=session["user_id"],
+            call_id=payload.call_id,
+            event_type=event.type,
+            timestamp_ms=event.timestamp_ms,
+            payload=event.payload,
+        )
+        if not accepted_event:
             break
-        serialized = {
-            "call_id": payload.call_id,
-            "type": event.type,
-            "timestamp_ms": event.timestamp_ms,
-            "payload": event.payload,
-        }
-        bucket.append(serialized)
         accepted += 1
         _append_audit_event(
             "telemetry_event",
@@ -486,7 +687,7 @@ async def ingest_telemetry(payload: TelemetryBatchRequest) -> TelemetryBatchResp
     return TelemetryBatchResponse(
         status="ok",
         accepted_events=accepted,
-        total_events_in_session=len(bucket),
+        total_events_in_session=len(_telemetry_bucket(session["user_id"])),
     )
 
 

@@ -36,6 +36,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `MAX_TTS_CHARS_PER_SESSION` = cuota de TTS por sesion (default `12000`)
 - `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
 - `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
+- `STORAGE_BACKEND` = `memory` (default) o `sqlite`
+- `SQLITE_DB_PATH` = ruta del fichero sqlite (default `runtime/asr-mt.sqlite3`)
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)
 - `ASR_DEVICE` = `cpu` (ej. `cuda`)
 - `ASR_COMPUTE_TYPE` = `int8` (ej. `float16`)
@@ -97,6 +99,8 @@ Ingesta eventos de operacion de llamada/reconexion/precheck.
 
 ### `POST /api/telemetry/summary`
 Resumen agregado de eventos de operacion por sesion.
+
+Con `STORAGE_BACKEND=sqlite`, rooms y telemetria sobreviven reinicios del servicio.
 
 ### `POST /api/sessions/consent`
 Registra consentimiento explicito de grabacion por `call_id` en audit log append-only.

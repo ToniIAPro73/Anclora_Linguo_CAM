@@ -22,6 +22,7 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
 - `services/asr-mt/app/main.py`
   - `POST /api/telemetry/events`
   - `POST /api/telemetry/summary`
+  - persistencia opcional de eventos en sqlite (`STORAGE_BACKEND=sqlite`),
   - almacenamiento in-memory acotado por `MAX_TELEMETRY_EVENTS_PER_SESSION`,
   - resumen ampliado con percentiles de `ttfc_ms` y `caption_lag_ms`.
 

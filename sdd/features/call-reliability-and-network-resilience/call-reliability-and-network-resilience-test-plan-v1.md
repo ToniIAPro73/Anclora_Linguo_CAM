@@ -26,6 +26,11 @@
 - Verificar que hipotesis fluyen por `captions_hyp` y pueden perderse sin bloquear cola.
 - Verificar que commits finales llegan por `captions_commit` y se renderizan correctamente.
 
+6. Restart test con persistencia sqlite
+- Levantar backend con `STORAGE_BACKEND=sqlite`.
+- Registrar 2 peers en sala, reiniciar backend y repetir registro/resolucion.
+- Verificar que nuevas sesiones de pairing no quedan corruptas tras restart.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

@@ -25,6 +25,11 @@
   - `caption_lag_ms_p50`, `caption_lag_ms_p95`
   - `dropped_hypothesis_rate_pct_avg`
 
+5. Persistencia de telemetria en sqlite
+- Configurar `STORAGE_BACKEND=sqlite`.
+- Emitir eventos de telemetria, reiniciar backend y consultar `POST /api/telemetry/summary`.
+- Verificar que el resumen mantiene eventos previos de la sesion.
+
 ## Resultado actual
 - lint: PASS
 - test: PASS

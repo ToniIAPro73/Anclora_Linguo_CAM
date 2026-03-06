@@ -14,6 +14,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - estado de conexion en UI para signaling y subtitulos,
   - reconexion de PeerJS en `disconnected`,
   - datachannels duales para subtitulos (`captions_hyp` no fiable y `captions_commit` fiable),
+  - persistencia opcional de salas con `STORAGE_BACKEND=sqlite` para sobrevivir reinicios,
   - avisos operativos de red,
   - parametrizacion y verificacion de TURN/ICE por entorno.
 - No incluye:
