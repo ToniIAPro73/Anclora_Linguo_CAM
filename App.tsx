@@ -867,13 +867,73 @@ const App: React.FC = () => {
     });
   }, [apiPost, peerId, session?.token]);
 
+  const waitForRoomPeerViaSse = useCallback((roomCode: string): Promise<RoomResolveResponse | null> => {
+    if (!session?.token || !peerId) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      const params = new URLSearchParams({
+        token: session.token,
+        room_code: roomCode,
+        requester_peer_id: peerId,
+      });
+      const url = `${ASR_MT_HTTP_URL}/api/rooms/subscribe?${params.toString()}`;
+      const source = new EventSource(url);
+      const timeout = window.setTimeout(() => {
+        source.close();
+        resolve(null);
+      }, 10000);
+
+      const clean = () => {
+        window.clearTimeout(timeout);
+      };
+
+      source.addEventListener('paired', (event) => {
+        try {
+          const parsed = JSON.parse((event as MessageEvent).data) as RoomResolveResponse;
+          clean();
+          source.close();
+          resolve(parsed);
+        } catch {
+          clean();
+          source.close();
+          resolve(null);
+        }
+      });
+
+      source.addEventListener('timeout', () => {
+        clean();
+        source.close();
+        resolve(null);
+      });
+
+      source.onerror = () => {
+        clean();
+        source.close();
+        resolve(null);
+      };
+    });
+  }, [peerId, session?.token]);
+
   const waitForRoomPeer = useCallback(async (roomCode: string): Promise<RoomResolveResponse> => {
     if (!session?.token || !peerId) {
       throw new Error('missing session or peer');
     }
     const timeoutMs = 25000;
     const startTime = Date.now();
-    let attempt = 0;
+    await registerRoomPresence(roomCode);
+    const sseResolved = await waitForRoomPeerViaSse(roomCode);
+    if (sseResolved?.target_peer_id && sseResolved?.initiator_peer_id) {
+      trackTelemetry('room_pair_resolved', {
+        room_code: roomCode,
+        time_to_pair_ms: Date.now() - startTime,
+        attempts: 1,
+        transport: 'sse',
+      });
+      return sseResolved;
+    }
+
+    let attempt = 1;
     while ((Date.now() - startTime) < timeoutMs) {
       await registerRoomPresence(roomCode);
       const resolved = await apiPost<RoomResolveResponse>('/api/rooms/resolve', {
@@ -886,6 +946,7 @@ const App: React.FC = () => {
           room_code: roomCode,
           time_to_pair_ms: Date.now() - startTime,
           attempts: attempt + 1,
+          transport: 'polling',
         });
         return resolved;
       }
@@ -895,7 +956,15 @@ const App: React.FC = () => {
       attempt += 1;
     }
     throw new Error('room participant timeout');
-  }, [apiPost, peerId, registerRoomPresence, session?.token, trackTelemetry, ui.waitingInRoom]);
+  }, [
+    apiPost,
+    peerId,
+    registerRoomPresence,
+    session?.token,
+    trackTelemetry,
+    ui.waitingInRoom,
+    waitForRoomPeerViaSse,
+  ]);
 
   useEffect(() => {
     if (!session?.token) return;

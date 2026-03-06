@@ -14,6 +14,7 @@
 - Ambos usuarios pulsan iniciar llamada.
 - El iniciador marca y el otro recibe llamada.
 - Validar `time_to_pair_ms` y `attempts` en evento `room_pair_resolved`.
+- Validar `transport` en telemetria (`sse` o `polling` fallback).
 
 3. Pre-check
 - Pulsar pre-check antes de llamar.

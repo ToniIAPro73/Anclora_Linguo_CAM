@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -13,8 +14,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 
 from .backends import (
@@ -659,6 +661,53 @@ async def resolve_room(payload: RoomResolveRequest) -> RoomResolveResponse:
     _validate_token(payload.token)
     room_code = _normalize_room_code(payload.room_code)
     return _resolve_room_participants(room_code, payload.requester_peer_id)
+
+
+@app.get("/api/rooms/subscribe")
+async def subscribe_room(
+    request: Request,
+    token: str,
+    room_code: str,
+    requester_peer_id: str,
+) -> StreamingResponse:
+    _validate_token(token)
+    normalized_room = _normalize_room_code(room_code)
+
+    async def event_stream():
+        started_at = time.time()
+        yield "event: ready\ndata: {}\n\n"
+        while True:
+            if await request.is_disconnected():
+                break
+
+            resolved = _resolve_room_participants(normalized_room, requester_peer_id)
+            if resolved.target_peer_id and resolved.initiator_peer_id:
+                payload = {
+                    "status": "paired",
+                    "room_code": resolved.room_code,
+                    "participants": resolved.participants,
+                    "target_peer_id": resolved.target_peer_id,
+                    "initiator_peer_id": resolved.initiator_peer_id,
+                }
+                yield f"event: paired\ndata: {json.dumps(payload, ensure_ascii=True)}\n\n"
+                break
+
+            if (time.time() - started_at) >= 25:
+                payload = {"status": "timeout", "room_code": normalized_room}
+                yield f"event: timeout\ndata: {json.dumps(payload, ensure_ascii=True)}\n\n"
+                break
+
+            yield "event: waiting\ndata: {}\n\n"
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.post("/api/telemetry/events", response_model=TelemetryBatchResponse)

@@ -94,6 +94,9 @@ Registra presencia de peer autenticado en sala.
 ### `POST /api/rooms/resolve`
 Resuelve contraparte e iniciador de llamada en sala.
 
+### `GET /api/rooms/subscribe`
+Canal SSE para notificar emparejamiento de sala sin polling agresivo.
+
 ### `POST /api/telemetry/events`
 Ingesta eventos de operacion de llamada/reconexion/precheck.
 

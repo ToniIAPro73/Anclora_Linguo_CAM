@@ -23,12 +23,14 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
   - `GET /health`
   - `POST /api/rooms/register`
   - `POST /api/rooms/resolve`
+  - `GET /api/rooms/subscribe` (SSE para emparejamiento push),
   - TTL de participantes en sala por `ROOM_PARTICIPANT_TTL_SECONDS`.
 
 ## 4. Cambios frontend
 - `App.tsx`
   - soporte `?room=` en URL.
-  - registro/polling de sala con backoff progresivo (200ms -> 500ms -> 1000ms).
+  - registro + suscripcion SSE de sala (`/api/rooms/subscribe`) con fallback a polling.
+  - polling de fallback con backoff progresivo (200ms -> 500ms -> 1000ms).
   - determinacion de iniciador para evitar doble marcado.
   - telemetria `room_pair_resolved` con `time_to_pair_ms`.
   - pre-check extendido con:
