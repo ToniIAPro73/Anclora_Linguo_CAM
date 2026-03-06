@@ -822,6 +822,7 @@ const App: React.FC = () => {
     }
     const timeoutMs = 25000;
     const startTime = Date.now();
+    let attempt = 0;
     while ((Date.now() - startTime) < timeoutMs) {
       await registerRoomPresence(roomCode);
       const resolved = await apiPost<RoomResolveResponse>('/api/rooms/resolve', {
@@ -830,13 +831,20 @@ const App: React.FC = () => {
         requester_peer_id: peerId,
       });
       if (resolved.target_peer_id && resolved.initiator_peer_id) {
+        trackTelemetry('room_pair_resolved', {
+          room_code: roomCode,
+          time_to_pair_ms: Date.now() - startTime,
+          attempts: attempt + 1,
+        });
         return resolved;
       }
       setPreCallStatus(ui.waitingInRoom);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const delayMs = attempt < 3 ? 200 : attempt < 6 ? 500 : 1000;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      attempt += 1;
     }
     throw new Error('room participant timeout');
-  }, [apiPost, peerId, registerRoomPresence, session?.token, ui.waitingInRoom]);
+  }, [apiPost, peerId, registerRoomPresence, session?.token, trackTelemetry, ui.waitingInRoom]);
 
   useEffect(() => {
     if (!session?.token) return;
