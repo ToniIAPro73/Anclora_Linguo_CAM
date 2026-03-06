@@ -6,6 +6,7 @@ export interface WebRtcStatsSnapshot {
   bitrateKbps: number | null;
   packetLossPct: number | null;
   rttMs: number | null;
+  jitterMs: number | null;
   iceState: string;
   connectionState: string;
 }
@@ -18,6 +19,7 @@ export function useWebRtcStats(
     bitrateKbps: null,
     packetLossPct: null,
     rttMs: null,
+    jitterMs: null,
     iceState: '',
     connectionState: '',
   });
@@ -34,6 +36,7 @@ export function useWebRtcStats(
           bitrateKbps: snapshot.bitrateKbps,
           packetLossPct: snapshot.packetLossPct,
           rttMs: snapshot.rttMs,
+          jitterMs: snapshot.jitterMs,
           iceState: peerConnection.iceConnectionState,
           connectionState: peerConnection.connectionState,
         });

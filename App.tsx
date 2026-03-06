@@ -777,6 +777,22 @@ const App: React.FC = () => {
     }
   }, [apiPost]);
 
+  const runCpuProbe = useCallback(() => {
+    const probeWindowMs = 250;
+    const start = performance.now();
+    let ops = 0;
+    let accumulator = 0;
+    while (performance.now() - start < probeWindowMs) {
+      for (let i = 0; i < 500; i += 1) {
+        accumulator += Math.sin((ops + i) * 0.01);
+      }
+      ops += 500;
+    }
+    if (!Number.isFinite(accumulator)) return 0;
+    const elapsed = Math.max(1, performance.now() - start);
+    return Math.round(ops / elapsed);
+  }, []);
+
   const runPrecallCheck = useCallback(async () => {
     setIsRunningPrecallCheck(true);
     setPreCallStatus('');
@@ -792,20 +808,55 @@ const App: React.FC = () => {
 
       const networkOk = navigator.onLine;
       let backendOk = false;
+      const backendLatencySamples: number[] = [];
       try {
-        const response = await fetch(`${ASR_MT_HTTP_URL}/health`);
-        backendOk = response.ok;
+        for (let i = 0; i < 3; i += 1) {
+          const startedAt = performance.now();
+          const response = await fetch(`${ASR_MT_HTTP_URL}/health`);
+          const elapsed = Math.round(performance.now() - startedAt);
+          if (response.ok) {
+            backendLatencySamples.push(elapsed);
+          }
+          backendOk = response.ok;
+          if (!response.ok) break;
+        }
       } catch {
         backendOk = false;
       }
+      const backendLatencyMs = backendLatencySamples.length
+        ? Math.round(
+          backendLatencySamples.reduce((sum, value) => sum + value, 0) / backendLatencySamples.length,
+        )
+        : -1;
+      const cpuOpsPerMs = runCpuProbe();
+      const performanceOk = backendLatencyMs > 0 && backendLatencyMs <= 1200 && cpuOpsPerMs >= 250;
 
-      const ok = mediaOk && networkOk && backendOk;
-      setPreCallStatus(ok ? ui.precheckOk : ui.precheckFail);
-      trackTelemetry('precheck_result', { ok, media_ok: mediaOk, network_ok: networkOk, backend_ok: backendOk });
+      const ok = mediaOk && networkOk && backendOk && performanceOk;
+      const perfSummary = `API ${backendLatencyMs > 0 ? backendLatencyMs : '--'}ms | CPU ${cpuOpsPerMs} ops/ms`;
+      setPreCallStatus(ok ? `${ui.precheckOk} (${perfSummary})` : `${ui.precheckFail} (${perfSummary})`);
+      trackTelemetry('precheck_result', {
+        ok,
+        media_ok: mediaOk,
+        network_ok: networkOk,
+        backend_ok: backendOk,
+        backend_latency_ms: backendLatencyMs,
+        cpu_ops_per_ms: cpuOpsPerMs,
+        rtt_ms: webrtcStats.rttMs ?? -1,
+        jitter_ms: webrtcStats.jitterMs ?? -1,
+        packet_loss_pct: webrtcStats.packetLossPct ?? -1,
+      });
     } finally {
       setIsRunningPrecallCheck(false);
     }
-  }, [trackTelemetry, ui.precheckFail, ui.precheckOk]);
+  }, [
+    runCpuProbe,
+    trackTelemetry,
+    ui.precheckFail,
+    ui.precheckOk,
+    webrtcStats.jitterMs,
+    webrtcStats.packetLossPct,
+    webrtcStats.rttMs,
+  ]);
 
   const registerRoomPresence = useCallback(async (roomCode: string) => {
     if (!session?.token || !peerId) return;

@@ -31,7 +31,10 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
   - registro/polling de sala con backoff progresivo (200ms -> 500ms -> 1000ms).
   - determinacion de iniciador para evitar doble marcado.
   - telemetria `room_pair_resolved` con `time_to_pair_ms`.
-  - pre-check de dispositivos/red desde setup.
+  - pre-check extendido con:
+    - latencia promedio de backend (`/health`, 3 muestras),
+    - benchmark CPU corto en cliente (`ops/ms`),
+    - snapshot de red WebRTC (`rtt/jitter/loss`) en telemetria.
 - `components/CallSetup.tsx`
   - boton copiar enlace de invitacion.
   - boton pre-check y estado inline.

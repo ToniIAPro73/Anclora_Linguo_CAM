@@ -18,6 +18,7 @@
 3. Pre-check
 - Pulsar pre-check antes de llamar.
 - Mostrar resultado inline OK/error.
+- Verificar que `precheck_result` incluye `backend_latency_ms` y `cpu_ops_per_ms`.
 
 ## Resultado actual
 - lint: PASS

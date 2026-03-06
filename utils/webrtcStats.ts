@@ -7,6 +7,7 @@ export interface WebRtcInboundSnapshot {
   bitrateKbps: number | null;
   packetLossPct: number | null;
   rttMs: number | null;
+  jitterMs: number | null;
   cache: InboundStatsCache | null;
 }
 
@@ -18,6 +19,7 @@ export function computeInboundStats(
   let packetsLost = 0;
   let packetsReceived = 0;
   let rttMs: number | null = null;
+  let jitterMs: number | null = null;
 
   report.forEach((stat) => {
     if (stat.type === 'inbound-rtp' && !stat.isRemote) {
@@ -29,6 +31,10 @@ export function computeInboundStats(
       }
       if (typeof stat.packetsReceived === 'number') {
         packetsReceived += stat.packetsReceived;
+      }
+      if (typeof stat.jitter === 'number') {
+        const jitterSampleMs = Math.round(stat.jitter * 1000);
+        jitterMs = jitterMs === null ? jitterSampleMs : Math.max(jitterMs, jitterSampleMs);
       }
     }
     if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated) {
@@ -56,6 +62,7 @@ export function computeInboundStats(
     bitrateKbps,
     packetLossPct,
     rttMs,
+    jitterMs,
     cache: { timestampMs: nowMs, bytesReceived },
   };
 }
