@@ -69,7 +69,7 @@ const CallSetup: React.FC<CallSetupProps> = ({
 }) => {
   const isConnecting = status === CallStatus.CONNECTING;
   return (
-    <div className="h-[100dvh] bg-black px-3 py-2 sm:px-5 sm:py-4 overflow-y-auto">
+    <div className="min-h-[100dvh] bg-black px-3 py-2 sm:px-5 sm:py-4 overflow-y-auto">
       <div className="min-h-full flex items-start sm:items-center justify-center">
         <div className="w-full max-w-[520px] space-y-3 sm:space-y-5 max-[820px]:space-y-2 animate-in fade-in duration-700">
           <div className="text-center relative">
