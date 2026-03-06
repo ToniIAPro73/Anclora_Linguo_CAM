@@ -12,6 +12,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - Incluye:
   - endpoint backend para TTS logical flow (`/api/chat/tts`),
   - cache de traducciones en backend,
+  - micro-batching de traducciones parciales en WS para reducir inferencias MT,
   - cuotas por sesion para traduccion y TTS,
   - endpoint de consumo de sesion (`/api/sessions/usage`),
   - UI con consumo de cuota en llamada,
@@ -23,9 +24,14 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 ## 3. Cambios backend
 - `services/asr-mt/app/main.py`
   - quota envs: `MAX_TRANSLATION_CHARS_PER_SESSION`, `MAX_TTS_CHARS_PER_SESSION`.
+  - controles de micro-batch en WS:
+    - `MT_MICRO_BATCH_WINDOW_MS`
+    - `MT_MICRO_BATCH_MAX_ITEMS`
+    - `MT_MICRO_BATCH_MAX_CHARS`
   - seleccion ASR por `ASR_BACKEND` (`mock|vosk|faster-whisper`) con aliases `streaming|quality`.
   - buckets de uso en memoria por `user_id`.
   - cache en memoria por par de idiomas + texto.
+  - traduccion por lotes con cache (`_translate_with_cache_many`) para parciales.
   - endpoints nuevos:
     - `POST /api/chat/tts`
     - `POST /api/sessions/usage`
@@ -34,6 +40,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - `services/asr-mt/app/backends.py`
   - `VoskASRBackend` para ruta de baja latencia (streaming en CPU).
   - `FasterWhisperASRBackend` mantiene ruta de mayor calidad.
+  - `translate_many` en MT para inferencia batch real sobre modelos Transformers/Marian.
 
 ## 4. Cambios frontend
 - `App.tsx`
@@ -47,11 +54,13 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - Traduccion/TTS pasan por backend autenticado con token firmado.
 - Cuotas por sesion impiden consumo ilimitado.
 - Cache reduce coste y latencia para textos repetidos.
+- Micro-batching reduce coste CPU en rachas de parciales seguidos.
 
 ## 6. Criterios de aceptacion
 - [x] TTS chat usa backend y no SDK cliente.
 - [x] Cuota por sesion funciona para MT y TTS.
 - [x] UI muestra consumo de sesion.
 - [x] Ruta ASR se puede elegir por entorno (`streaming` o `quality`).
+- [x] Backend MT soporta micro-batching configurable para parciales WS.
 - [x] Variables de entorno y README actualizados.
 - [x] `npm run lint` y `npm run build` en verde.

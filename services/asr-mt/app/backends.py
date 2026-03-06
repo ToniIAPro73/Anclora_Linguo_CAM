@@ -31,6 +31,11 @@ class MTBackend:
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         raise NotImplementedError
 
+    def translate_many(
+        self, texts: list[str], source_lang: str, target_lang: str
+    ) -> list[str]:
+        return [self.translate(text, source_lang, target_lang) for text in texts]
+
 
 class MockASRBackend(ASRBackend):
     def __init__(self) -> None:
@@ -54,6 +59,11 @@ class MockMTBackend(MTBackend):
         if not text:
             return text
         return f"[{target_lang}] {text}"
+
+    def translate_many(
+        self, texts: list[str], source_lang: str, target_lang: str
+    ) -> list[str]:
+        return [self.translate(text, source_lang, target_lang) for text in texts]
 
 
 class FasterWhisperASRBackend(ASRBackend):
@@ -264,6 +274,56 @@ class TransformersMTBackend(MTBackend):
                 output = model.generate(**inputs)
 
         return tokenizer.batch_decode(output, skip_special_tokens=True)[0]
+
+    def translate_many(
+        self, texts: list[str], source_lang: str, target_lang: str
+    ) -> list[str]:
+        normalized_texts = [text for text in texts if text]
+        if not normalized_texts:
+            return ["" for _ in texts]
+
+        tokenizer, model = self._get_model_pair(source_lang, target_lang)
+        if self._is_nllb:
+            src_lang = map_nllb_lang(source_lang)
+            tgt_lang = map_nllb_lang(target_lang)
+            if src_lang:
+                tokenizer.src_lang = src_lang
+            inputs = tokenizer(
+                normalized_texts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            ).to(self._device)
+            forced_bos = (
+                tokenizer.lang_code_to_id.get(tgt_lang)
+                if tgt_lang and hasattr(tokenizer, "lang_code_to_id")
+                else None
+            )
+            with self._torch.inference_mode():
+                output = model.generate(
+                    **inputs,
+                    forced_bos_token_id=forced_bos,
+                )
+        else:
+            inputs = tokenizer(
+                normalized_texts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            ).to(self._device)
+            with self._torch.inference_mode():
+                output = model.generate(**inputs)
+
+        decoded = tokenizer.batch_decode(output, skip_special_tokens=True)
+        response: list[str] = []
+        decoded_idx = 0
+        for original in texts:
+            if not original:
+                response.append("")
+            else:
+                response.append(decoded[decoded_idx])
+                decoded_idx += 1
+        return response
 
 
 NLLB_LANG_MAP = {

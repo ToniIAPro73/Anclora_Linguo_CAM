@@ -48,6 +48,9 @@ MAX_TRANSLATION_CHARS_PER_SESSION = int(
     os.getenv("MAX_TRANSLATION_CHARS_PER_SESSION", "20000")
 )
 MAX_TTS_CHARS_PER_SESSION = int(os.getenv("MAX_TTS_CHARS_PER_SESSION", "12000"))
+MT_MICRO_BATCH_WINDOW_MS = int(os.getenv("MT_MICRO_BATCH_WINDOW_MS", "35"))
+MT_MICRO_BATCH_MAX_ITEMS = int(os.getenv("MT_MICRO_BATCH_MAX_ITEMS", "4"))
+MT_MICRO_BATCH_MAX_CHARS = int(os.getenv("MT_MICRO_BATCH_MAX_CHARS", "220"))
 
 SESSION_USAGE: dict[str, dict[str, int]] = {}
 TRANSLATION_CACHE: dict[str, str] = {}
@@ -313,6 +316,45 @@ def _translate_with_cache(mt_backend: MTBackend, text: str, source_lang: str, ta
     if len(TRANSLATION_CACHE) > 5000:
         TRANSLATION_CACHE.pop(next(iter(TRANSLATION_CACHE)))
     return translated
+
+
+def _translate_with_cache_many(
+    mt_backend: MTBackend,
+    texts: list[str],
+    source_lang: str,
+    target_lang: str,
+) -> list[str]:
+    if not texts:
+        return []
+
+    results: list[Optional[str]] = [None] * len(texts)
+    missing_texts: list[str] = []
+    missing_keys: list[str] = []
+    key_to_result_indexes: dict[str, list[int]] = {}
+
+    for idx, text in enumerate(texts):
+        key = _cache_key(text, source_lang, target_lang)
+        cached = TRANSLATION_CACHE.get(key)
+        if cached is not None:
+            results[idx] = cached
+            continue
+        key_to_result_indexes.setdefault(key, []).append(idx)
+        if key_to_result_indexes[key] == [idx]:
+            missing_keys.append(key)
+            missing_texts.append(text)
+
+    if missing_texts:
+        translated_missing = mt_backend.translate_many(
+            missing_texts, source_lang, target_lang
+        )
+        for key, translated in zip(missing_keys, translated_missing):
+            TRANSLATION_CACHE[key] = translated
+            if len(TRANSLATION_CACHE) > 5000:
+                TRANSLATION_CACHE.pop(next(iter(TRANSLATION_CACHE)))
+            for idx in key_to_result_indexes[key]:
+                results[idx] = translated
+
+    return [text or "" for text in results]
 
 
 def _normalize_room_code(room_code: str) -> str:
@@ -822,6 +864,44 @@ async def ws_asr_mt(websocket: WebSocket) -> None:
     asr_backend = build_asr_backend()
     mt_backend = build_mt_backend()
     session_config: Optional[SessionConfig] = None
+    pending_partials: list[str] = []
+    first_pending_partial_ts_ms: Optional[int] = None
+    pending_chars = 0
+
+    async def flush_pending_partials(force: bool = False) -> None:
+        nonlocal pending_partials, first_pending_partial_ts_ms, pending_chars
+        if not session_config or not pending_partials:
+            return
+        now_ms = int(time.time() * 1000)
+        age_ms = (
+            now_ms - first_pending_partial_ts_ms
+            if first_pending_partial_ts_ms is not None
+            else 0
+        )
+        if not force and MT_MICRO_BATCH_WINDOW_MS > 0 and age_ms < MT_MICRO_BATCH_WINDOW_MS:
+            return
+
+        translated_batch = _translate_with_cache_many(
+            mt_backend,
+            pending_partials,
+            session_config.source_lang,
+            session_config.target_lang,
+        )
+        for original_text, translated_text in zip(pending_partials, translated_batch):
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "partial",
+                        "text": original_text,
+                        "translated_text": translated_text,
+                        "timestamp_ms": int(time.time() * 1000),
+                    }
+                )
+            )
+
+        pending_partials = []
+        first_pending_partial_ts_ms = None
+        pending_chars = 0
 
     try:
         while True:
@@ -830,6 +910,7 @@ async def ws_asr_mt(websocket: WebSocket) -> None:
                 raise WebSocketDisconnect
 
             if "text" in message:
+                await flush_pending_partials(force=True)
                 await handle_text_message(
                     websocket, message["text"], asr_backend, mt_backend, lambda: session_config
                 )
@@ -856,19 +937,18 @@ async def ws_asr_mt(websocket: WebSocket) -> None:
                 audio_bytes = message["bytes"]
                 partial = asr_backend.transcribe_chunk(audio_bytes)
                 if partial:
-                    translated = mt_backend.translate(
-                        partial, session_config.source_lang, session_config.target_lang
-                    )
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "type": "partial",
-                                "text": partial,
-                                "translated_text": translated,
-                                "timestamp_ms": int(time.time() * 1000),
-                            }
-                        )
-                    )
+                    pending_partials.append(partial)
+                    pending_chars += len(partial)
+                    if first_pending_partial_ts_ms is None:
+                        first_pending_partial_ts_ms = int(time.time() * 1000)
+                    if (
+                        MT_MICRO_BATCH_WINDOW_MS <= 0
+                        or len(pending_partials) >= MT_MICRO_BATCH_MAX_ITEMS
+                        or pending_chars >= MT_MICRO_BATCH_MAX_CHARS
+                    ):
+                        await flush_pending_partials(force=True)
+                    else:
+                        await flush_pending_partials(force=False)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
 
@@ -896,7 +976,8 @@ async def handle_text_message(
         final = asr_backend.finalize()
         session_config = config_provider()
         if final and session_config:
-            translated = mt_backend.translate(
+            translated = _translate_with_cache(
+                mt_backend,
                 final, session_config.source_lang, session_config.target_lang
             )
             await websocket.send_text(
@@ -914,7 +995,8 @@ async def handle_text_message(
         final = asr_backend.finalize()
         session_config = config_provider()
         if final and session_config:
-            translated = mt_backend.translate(
+            translated = _translate_with_cache(
+                mt_backend,
                 final, session_config.source_lang, session_config.target_lang
             )
             await websocket.send_text(

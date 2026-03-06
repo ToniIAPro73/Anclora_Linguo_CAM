@@ -34,6 +34,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `AUDIT_LOG_PATH` = ruta de log append-only (default `runtime/audit-log.jsonl`)
 - `MAX_TRANSLATION_CHARS_PER_SESSION` = cuota de traduccion por sesion (default `20000`)
 - `MAX_TTS_CHARS_PER_SESSION` = cuota de TTS por sesion (default `12000`)
+- `MT_MICRO_BATCH_WINDOW_MS` = ventana de micro-batch para parciales WS (default `35`)
+- `MT_MICRO_BATCH_MAX_ITEMS` = max parciales por batch (default `4`)
+- `MT_MICRO_BATCH_MAX_CHARS` = max caracteres acumulados por batch (default `220`)
 - `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
 - `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
 - `STORAGE_BACKEND` = `memory` (default) o `sqlite`
@@ -66,6 +69,8 @@ Ruta low-latency (streaming ASR con Vosk):
 ASR_BACKEND=streaming MT_BACKEND=transformers MT_MODEL=Helsinki-NLP/opus-mt-es-en \
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
+
+El servicio aplica micro-batching de traducciones parciales por WebSocket (ventana corta) y cache por prefijo para reducir inferencias repetidas en MT.
 
 Para NLLB usa un modelo NLLB y codigos compatibles (se mapean los idiomas mas comunes).
 

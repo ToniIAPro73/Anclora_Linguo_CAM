@@ -34,6 +34,14 @@
 - Configurar `ASR_BACKEND=quality`.
 - Esperado: el servicio arranca y mantiene salida de subtitulos sin cambiar contrato WS.
 
+8. MT micro-batching WS
+- Configurar `MT_MICRO_BATCH_WINDOW_MS=35` y generar rafaga de parciales.
+- Esperado: traduccion enviada en lotes cortos conservando orden de subtitulos.
+
+9. MT micro-batching disabled
+- Configurar `MT_MICRO_BATCH_WINDOW_MS=0`.
+- Esperado: cada parcial se traduce/publica inmediatamente (sin agrupacion temporal).
+
 ## Resultado actual
 - lint: PASS
 - build: PASS
