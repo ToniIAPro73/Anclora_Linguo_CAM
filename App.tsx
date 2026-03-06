@@ -1009,6 +1009,143 @@ const App: React.FC = () => {
     return Math.round(ops / elapsed);
   }, []);
 
+  const runWebRtcProbe = useCallback(async () => {
+    const pc1 = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc2 = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    let dc1: RTCDataChannel | null = null;
+    let dc2: RTCDataChannel | null = null;
+    let resolved = false;
+
+    const cleanup = () => {
+      try {
+        dc1?.close();
+      } catch {
+        // noop
+      }
+      try {
+        dc2?.close();
+      } catch {
+        // noop
+      }
+      try {
+        pc1.close();
+      } catch {
+        // noop
+      }
+      try {
+        pc2.close();
+      } catch {
+        // noop
+      }
+    };
+
+    const waitForConnected = () => new Promise<boolean>((resolve) => {
+      const timeout = window.setTimeout(() => {
+        if (resolved) return;
+        resolved = true;
+        resolve(false);
+      }, 8000);
+      const maybeResolve = () => {
+        if (resolved) return;
+        const connected =
+          (pc1.iceConnectionState === 'connected' || pc1.iceConnectionState === 'completed')
+          && (pc2.iceConnectionState === 'connected' || pc2.iceConnectionState === 'completed');
+        if (connected) {
+          window.clearTimeout(timeout);
+          resolved = true;
+          resolve(true);
+        }
+      };
+      pc1.oniceconnectionstatechange = maybeResolve;
+      pc2.oniceconnectionstatechange = maybeResolve;
+      maybeResolve();
+    });
+
+    try {
+      pc1.onicecandidate = (event) => {
+        if (event.candidate) {
+          pc2.addIceCandidate(event.candidate).catch(() => undefined);
+        }
+      };
+      pc2.onicecandidate = (event) => {
+        if (event.candidate) {
+          pc1.addIceCandidate(event.candidate).catch(() => undefined);
+        }
+      };
+
+      dc1 = pc1.createDataChannel('precheck');
+      pc2.ondatachannel = (event) => {
+        dc2 = event.channel;
+        dc2.onmessage = (msg) => {
+          if (typeof msg.data === 'string' && msg.data.startsWith('ping:')) {
+            dc2?.send(msg.data.replace('ping:', 'pong:'));
+          }
+        };
+      };
+
+      const offer = await pc1.createOffer();
+      await pc1.setLocalDescription(offer);
+      await pc2.setRemoteDescription(offer);
+      const answer = await pc2.createAnswer();
+      await pc2.setLocalDescription(answer);
+      await pc1.setRemoteDescription(answer);
+
+      const connected = await waitForConnected();
+      if (!connected) {
+        cleanup();
+        return { ok: false, rttMs: -1, usesTurnRelay: false };
+      }
+
+      const pingRtt = await new Promise<number>((resolve) => {
+        if (!dc1) {
+          resolve(-1);
+          return;
+        }
+        const timeout = window.setTimeout(() => resolve(-1), 2000);
+        const sentAt = performance.now();
+        dc1.onmessage = (msg) => {
+          if (typeof msg.data === 'string' && msg.data.startsWith('pong:')) {
+            window.clearTimeout(timeout);
+            resolve(Math.round(performance.now() - sentAt));
+          }
+        };
+        dc1.onopen = () => {
+          dc1?.send(`ping:${Date.now()}`);
+        };
+        if (dc1.readyState === 'open') {
+          dc1.send(`ping:${Date.now()}`);
+        }
+      });
+
+      const stats = await pc1.getStats();
+      let usesTurnRelay = false;
+      const selectedPairIds = new Set<string>();
+      stats.forEach((stat: any) => {
+        if (stat.type === 'transport' && stat.selectedCandidatePairId) {
+          selectedPairIds.add(stat.selectedCandidatePairId);
+        }
+      });
+      stats.forEach((stat: any) => {
+        if (stat.type === 'candidate-pair' && selectedPairIds.has(stat.id)) {
+          const localCandidate = stat.localCandidateId ? stats.get(stat.localCandidateId as string) : null;
+          const remoteCandidate = stat.remoteCandidateId ? stats.get(stat.remoteCandidateId as string) : null;
+          if (
+            (localCandidate as any)?.candidateType === 'relay'
+            || (remoteCandidate as any)?.candidateType === 'relay'
+          ) {
+            usesTurnRelay = true;
+          }
+        }
+      });
+
+      cleanup();
+      return { ok: true, rttMs: pingRtt, usesTurnRelay };
+    } catch {
+      cleanup();
+      return { ok: false, rttMs: -1, usesTurnRelay: false };
+    }
+  }, []);
+
   const runPrecallCheck = useCallback(async () => {
     setIsRunningPrecallCheck(true);
     setPreCallStatus('');
@@ -1045,18 +1182,23 @@ const App: React.FC = () => {
         )
         : -1;
       const cpuOpsPerMs = runCpuProbe();
+      const webrtcProbe = await runWebRtcProbe();
       const performanceOk = backendLatencyMs > 0 && backendLatencyMs <= 1200 && cpuOpsPerMs >= 250;
+      const webrtcOk = webrtcProbe.ok && (webrtcProbe.rttMs < 0 || webrtcProbe.rttMs <= 1600);
 
-      const ok = mediaOk && networkOk && backendOk && performanceOk;
-      const perfSummary = `API ${backendLatencyMs > 0 ? backendLatencyMs : '--'}ms | CPU ${cpuOpsPerMs} ops/ms`;
+      const ok = mediaOk && networkOk && backendOk && performanceOk && webrtcOk;
+      const perfSummary = `API ${backendLatencyMs > 0 ? backendLatencyMs : '--'}ms | CPU ${cpuOpsPerMs} ops/ms | ICE ${webrtcProbe.ok ? 'ok' : 'fail'} | RTT ${webrtcProbe.rttMs > 0 ? webrtcProbe.rttMs : '--'}ms`;
       setPreCallStatus(ok ? `${ui.precheckOk} (${perfSummary})` : `${ui.precheckFail} (${perfSummary})`);
       trackTelemetry('precheck_result', {
         ok,
         media_ok: mediaOk,
         network_ok: networkOk,
         backend_ok: backendOk,
+        ice_ok: webrtcProbe.ok,
+        turn_relay: webrtcProbe.usesTurnRelay,
         backend_latency_ms: backendLatencyMs,
         cpu_ops_per_ms: cpuOpsPerMs,
+        precheck_rtt_ms: webrtcProbe.rttMs,
         rtt_ms: webrtcStats.rttMs ?? -1,
         jitter_ms: webrtcStats.jitterMs ?? -1,
         packet_loss_pct: webrtcStats.packetLossPct ?? -1,
@@ -1065,6 +1207,7 @@ const App: React.FC = () => {
       setIsRunningPrecallCheck(false);
     }
   }, [
+    runWebRtcProbe,
     runCpuProbe,
     trackTelemetry,
     ui.precheckFail,

@@ -21,6 +21,10 @@
 - Mostrar resultado inline OK/error.
 - Verificar que `precheck_result` incluye `backend_latency_ms` y `cpu_ops_per_ms`.
 
+4. Pre-check ICE/WebRTC
+- Ejecutar pre-check en 2 redes (normal y restrictiva).
+- Verificar que `precheck_result` incluye `ice_ok`, `precheck_rtt_ms` y `turn_relay`.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

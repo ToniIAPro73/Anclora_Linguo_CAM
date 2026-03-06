@@ -12,7 +12,7 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
 - Incluye:
   - flujo de sala por codigo/enlace,
   - registro y resolucion de participantes en backend,
-  - pre-call check de camara, microfono, red y backend,
+  - pre-call check de camara, microfono, red, backend e ICE/WebRTC,
   - flujo de llamada iniciada automaticamente por el participante iniciador de sala.
 - No incluye:
   - persistencia de salas en base de datos,
@@ -36,7 +36,8 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
   - pre-check extendido con:
     - latencia promedio de backend (`/health`, 3 muestras),
     - benchmark CPU corto en cliente (`ops/ms`),
-    - snapshot de red WebRTC (`rtt/jitter/loss`) en telemetria.
+    - snapshot de red WebRTC (`rtt/jitter/loss`) en telemetria,
+    - probe ICE/datachannel loopback para detectar conectividad WebRTC real y uso de relay TURN.
 - `components/CallSetup.tsx`
   - boton copiar enlace de invitacion.
   - boton pre-check y estado inline.
