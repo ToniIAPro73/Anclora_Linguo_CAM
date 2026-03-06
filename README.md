@@ -17,6 +17,11 @@ Prerequisites:
 5. Start frontend:
    `npm run dev`
 
+## E2E baseline (Playwright)
+
+Run the minimal 2-browser flow (room join + call + subtitle assertion):
+`npm run test:e2e`
+
 Notes:
 - No LLM API key is required in frontend.
 - For production-like reliability, configure TURN in `VITE_ICE_SERVERS`.

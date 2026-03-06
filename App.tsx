@@ -293,6 +293,7 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     validatingSession: 'Verifica sessione sicura...',
   },
 };
+const ENABLE_E2E_HOOKS = import.meta.env.VITE_ENABLE_E2E_HOOKS === 'true';
 
 const percentile = (values: number[], p: number): number | null => {
   if (!values.length) return null;
@@ -741,6 +742,31 @@ const App: React.FC = () => {
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  useEffect(() => {
+    if (!ENABLE_E2E_HOOKS) return;
+    (window as any).__E2E_SEND_SUBTITLE = (text: string) => {
+      const payload = {
+        type: 'subtitle',
+        text,
+        is_final: true,
+        origin_ts_ms: Date.now(),
+        seq: subtitleSeqRef.current++,
+      };
+      if (captionsCommitChannelRef.current?.readyState === 'open') {
+        captionsCommitChannelRef.current.send(JSON.stringify(payload));
+        return true;
+      }
+      if (dataConnRef.current?.open) {
+        dataConnRef.current.send(payload);
+        return true;
+      }
+      return false;
+    };
+    return () => {
+      delete (window as any).__E2E_SEND_SUBTITLE;
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(UI_LOCALE_STORAGE_KEY, uiLocale);

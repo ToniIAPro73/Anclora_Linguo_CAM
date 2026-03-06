@@ -13,9 +13,10 @@ Reducir deuda tecnica en flujo de llamada corrigiendo riesgos de grabacion y mej
   - fix del loop de grabacion basado en ref (evita closure stale),
   - limpieza robusta de recursos de grabacion (AudioContext, streams, RAF),
   - utilidades de sesion de llamada desacopladas en `utils/callSession.ts`,
-  - tests unitarios para utilidades criticas.
+  - tests unitarios para utilidades criticas,
+  - baseline E2E Playwright (2 navegadores, join room, llamada, subtitulos).
 - No incluye:
-  - suite e2e con navegador real.
+  - test matrix multi-red automatizada con perdida/jitter inyectados.
 
 ## 3. Cambios aplicados
 - `hooks/useRecording.ts`
@@ -27,6 +28,9 @@ Reducir deuda tecnica en flujo de llamada corrigiendo riesgos de grabacion y mej
   - cobertura de utilidades de sesion y cleanup.
 - `App.tsx`
   - uso de utilidades para reducir logica repetida.
+- `playwright.config.ts` + `tests/e2e/call-captions.spec.ts`
+  - arranque integrado frontend + peer-server + ASR/MT mock.
+  - validacion de flujo real de llamada y recepcion de subtitulos.
 
 ## 4. Criterios de aceptacion
 - [x] Riesgo de parada temprana de grabacion corregido.
