@@ -25,6 +25,11 @@
 - Ejecutar pre-check en 2 redes (normal y restrictiva).
 - Verificar que `precheck_result` incluye `ice_ok`, `precheck_rtt_ms` y `turn_relay`.
 
+5. Export transcript VTT/SRT
+- Durante llamada, generar subtitulos finales de ambos participantes.
+- Exportar VTT y SRT desde chat sidebar.
+- Verificar etiquetas de speaker y timestamps en ambos archivos.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

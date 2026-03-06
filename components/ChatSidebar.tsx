@@ -14,7 +14,10 @@ interface ChatSidebarProps {
   chatInput: string;
   speakingMessageId: string | null;
   translatingMessageId: string | null;
+  canExportTranscript: boolean;
   onClose: () => void;
+  onExportVtt: () => void;
+  onExportSrt: () => void;
   onTranslate: (msg: ChatMessage) => void;
   onSpeak: (msg: ChatMessage) => void;
   onChatInputChange: (value: string) => void;
@@ -28,7 +31,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   chatInput,
   speakingMessageId,
   translatingMessageId,
+  canExportTranscript,
   onClose,
+  onExportVtt,
+  onExportSrt,
   onTranslate,
   onSpeak,
   onChatInputChange,
@@ -39,9 +45,35 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     <div className={`transition-all duration-300 ease-in-out bg-zinc-900/40 backdrop-blur-2xl border-l border-white/5 flex flex-col ${isChatOpen ? 'w-80 md:w-96' : 'w-0 overflow-hidden opacity-0'}`}>
       <div className="p-4 border-b border-white/5 flex justify-between items-center">
         <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">Live Chat</h3>
-        <button onClick={onClose} className="text-zinc-500 hover:text-white">
-          <i className="fas fa-times"></i>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onExportVtt}
+            disabled={!canExportTranscript}
+            className={`text-xs px-2 py-1 rounded-md border transition-colors ${
+              canExportTranscript
+                ? 'border-white/20 text-zinc-300 hover:text-white hover:border-white/40'
+                : 'border-white/10 text-zinc-600 cursor-not-allowed'
+            }`}
+            title="Export transcript as VTT"
+          >
+            VTT
+          </button>
+          <button
+            onClick={onExportSrt}
+            disabled={!canExportTranscript}
+            className={`text-xs px-2 py-1 rounded-md border transition-colors ${
+              canExportTranscript
+                ? 'border-white/20 text-zinc-300 hover:text-white hover:border-white/40'
+                : 'border-white/10 text-zinc-600 cursor-not-allowed'
+            }`}
+            title="Export transcript as SRT"
+          >
+            SRT
+          </button>
+          <button onClick={onClose} className="text-zinc-500 hover:text-white">
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">

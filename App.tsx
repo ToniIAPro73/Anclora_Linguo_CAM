@@ -35,6 +35,7 @@ import {
   shouldInitiateCall,
   stopMediaStream,
 } from './utils/callSession';
+import { toSrt, toVtt, TranscriptEntry } from './utils/transcript';
 
 interface ChatMessage {
   id: string;
@@ -368,6 +369,7 @@ const App: React.FC = () => {
   const [remoteSubtitleConfirmed, setRemoteSubtitleConfirmed] = useState('');
   const [remoteSubtitleHypothesis, setRemoteSubtitleHypothesis] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [transcriptEntries, setTranscriptEntries] = useState<TranscriptEntry[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -434,6 +436,19 @@ const App: React.FC = () => {
   const captionsCommitChannelRef = useRef<RTCDataChannel | null>(null);
   const subtitleSeqRef = useRef(0);
 
+  const appendTranscriptEntry = useCallback((speaker: string, text: string) => {
+    const cleaned = text.trim();
+    if (!cleaned) return;
+    const timestampMs = Date.now();
+    setTranscriptEntries((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && last.speaker === speaker && last.text === cleaned && (timestampMs - last.timestampMs) < 1200) {
+        return prev;
+      }
+      return [...prev, { speaker, text: cleaned, timestampMs }];
+    });
+  }, []);
+
   const webrtcStats = useWebRtcStats(
     currentCallRef.current?.peerConnection ?? null,
     status === CallStatus.ACTIVE,
@@ -479,6 +494,7 @@ const App: React.FC = () => {
       };
 
       if (isFinal) {
+        appendTranscriptEntry(sessionRef.current?.displayName || 'You', text);
         if (captionsCommitChannelRef.current?.readyState === 'open') {
           captionsCommitChannelRef.current.send(JSON.stringify(payload));
         } else if (dataConnRef.current?.open) {
@@ -577,6 +593,9 @@ const App: React.FC = () => {
       stableCount: next.stableCount,
     };
     remoteSubtitleConfirmedRef.current = next.confirmed;
+    if (payload.is_final) {
+      appendTranscriptEntry('Peer', text);
+    }
     setRemoteSubtitleConfirmed(next.confirmed);
     setRemoteSubtitleHypothesis(next.hypothesis);
     const subtitleTimeout = payload.is_final ? 4000 : 1800;
@@ -590,7 +609,7 @@ const App: React.FC = () => {
         setRemoteSubtitleHypothesis('');
       }
     }, subtitleTimeout);
-  }, []);
+  }, [appendTranscriptEntry]);
 
   const setupCaptionChannels = useCallback((call: any, isInitiator: boolean) => {
     const pc: RTCPeerConnection | null = call?.peerConnection ?? null;
@@ -683,6 +702,7 @@ const App: React.FC = () => {
     setLocalSubtitleHypothesis('');
     setRemoteSubtitleConfirmed('');
     setRemoteSubtitleHypothesis('');
+    setTranscriptEntries([]);
     callStartedAtRef.current = Date.now();
     firstRemoteSubtitleAtRef.current = null;
     captionLagSamplesRef.current = [];
@@ -944,6 +964,30 @@ const App: React.FC = () => {
       console.error('Telemetry send failed:', error);
     }
   }, [apiPost, session?.token]);
+
+  const triggerDownload = useCallback((filename: string, content: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const exportTranscriptVtt = useCallback(() => {
+    if (!transcriptEntries.length) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    triggerDownload(`anclora-transcript-${stamp}.vtt`, toVtt(transcriptEntries), 'text/vtt;charset=utf-8');
+  }, [transcriptEntries, triggerDownload]);
+
+  const exportTranscriptSrt = useCallback(() => {
+    if (!transcriptEntries.length) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    triggerDownload(`anclora-transcript-${stamp}.srt`, toSrt(transcriptEntries), 'application/x-subrip;charset=utf-8');
+  }, [transcriptEntries, triggerDownload]);
 
   useEffect(() => {
     trackTelemetryRef.current = (eventType: string, payload: TelemetryEventPayload = {}) => {
@@ -1952,7 +1996,10 @@ const App: React.FC = () => {
           chatInput={chatInput}
           speakingMessageId={speakingMessageId}
           translatingMessageId={translatingMessageId}
+          canExportTranscript={transcriptEntries.length > 0}
           onClose={() => setIsChatOpen(false)}
+          onExportVtt={exportTranscriptVtt}
+          onExportSrt={exportTranscriptSrt}
           onTranslate={translateMessage}
           onSpeak={speakMessage}
           onChatInputChange={setChatInput}

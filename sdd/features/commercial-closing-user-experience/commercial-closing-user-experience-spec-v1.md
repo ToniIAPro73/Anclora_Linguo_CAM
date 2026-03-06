@@ -13,6 +13,7 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
   - flujo de sala por codigo/enlace,
   - registro y resolucion de participantes en backend,
   - pre-call check de camara, microfono, red, backend e ICE/WebRTC,
+  - transcript ligero con etiquetas de speaker y export VTT/SRT,
   - flujo de llamada iniciada automaticamente por el participante iniciador de sala.
 - No incluye:
   - persistencia de salas en base de datos,
@@ -41,9 +42,12 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
 - `components/CallSetup.tsx`
   - boton copiar enlace de invitacion.
   - boton pre-check y estado inline.
+- `components/ChatSidebar.tsx`
+  - controles de export transcript (`VTT`/`SRT`) y estado habilitado/deshabilitado.
 
 ## 5. Criterios de aceptacion
 - [x] No se requiere intercambio manual de Peer ID para conectar.
 - [x] Existe enlace compartible de sala.
 - [x] Existe pre-check operativo previo a llamada.
+- [x] Existe export de transcript etiquetado por speaker.
 - [x] `npm run lint` y `npm run build` en verde.
