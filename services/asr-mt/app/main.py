@@ -51,6 +51,21 @@ MAX_TTS_CHARS_PER_SESSION = int(os.getenv("MAX_TTS_CHARS_PER_SESSION", "12000"))
 MT_MICRO_BATCH_WINDOW_MS = int(os.getenv("MT_MICRO_BATCH_WINDOW_MS", "35"))
 MT_MICRO_BATCH_MAX_ITEMS = int(os.getenv("MT_MICRO_BATCH_MAX_ITEMS", "4"))
 MT_MICRO_BATCH_MAX_CHARS = int(os.getenv("MT_MICRO_BATCH_MAX_CHARS", "220"))
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+RATE_LIMIT_AUTH_SESSION_PER_WINDOW = int(
+    os.getenv("RATE_LIMIT_AUTH_SESSION_PER_WINDOW", "20")
+)
+RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW = int(
+    os.getenv("RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW", "120")
+)
+RATE_LIMIT_CHAT_TTS_PER_WINDOW = int(os.getenv("RATE_LIMIT_CHAT_TTS_PER_WINDOW", "120"))
+RATE_LIMIT_ROOMS_PER_WINDOW = int(os.getenv("RATE_LIMIT_ROOMS_PER_WINDOW", "60"))
+RATE_LIMIT_TELEMETRY_PER_WINDOW = int(
+    os.getenv("RATE_LIMIT_TELEMETRY_PER_WINDOW", "240")
+)
+RATE_LIMIT_WS_MESSAGES_PER_WINDOW = int(
+    os.getenv("RATE_LIMIT_WS_MESSAGES_PER_WINDOW", "1200")
+)
 
 SESSION_USAGE: dict[str, dict[str, int]] = {}
 TRANSLATION_CACHE: dict[str, str] = {}
@@ -61,6 +76,8 @@ TELEMETRY_EVENTS: dict[str, list[dict[str, Any]]] = {}
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").strip().lower()
 SQLITE_DB_PATH = Path(os.getenv("SQLITE_DB_PATH", "runtime/asr-mt.sqlite3"))
 SQLITE_LOCK = threading.Lock()
+RATE_LIMIT_LOCK = threading.Lock()
+RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
 
 
 def _b64url(data: bytes) -> str:
@@ -106,6 +123,46 @@ def _append_audit_event(event_type: str, payload: dict[str, Any]) -> None:
     }
     with AUDIT_LOG_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(line, ensure_ascii=True) + "\n")
+
+
+def _request_identity(request: Request) -> str:
+    client = request.client
+    if client and client.host:
+        return client.host
+    return "unknown"
+
+
+def _websocket_identity(websocket: WebSocket) -> str:
+    client = websocket.client
+    if client and client.host:
+        return client.host
+    return "unknown"
+
+
+def _is_rate_limited(scope: str, identity: str, limit: int) -> bool:
+    if limit <= 0:
+        return False
+    now = time.time()
+    threshold = now - RATE_LIMIT_WINDOW_SECONDS
+    bucket_key = f"{scope}:{identity}"
+
+    with RATE_LIMIT_LOCK:
+        bucket = RATE_LIMIT_BUCKETS.get(bucket_key)
+        if bucket is None:
+            bucket = []
+            RATE_LIMIT_BUCKETS[bucket_key] = bucket
+        pruned = [ts for ts in bucket if ts >= threshold]
+        if len(pruned) >= limit:
+            RATE_LIMIT_BUCKETS[bucket_key] = pruned
+            return True
+        pruned.append(now)
+        RATE_LIMIT_BUCKETS[bucket_key] = pruned
+        return False
+
+
+def _enforce_rate_limit(scope: str, identity: str, limit: int) -> None:
+    if _is_rate_limited(scope, identity, limit):
+        raise HTTPException(status_code=429, detail=f"rate limit exceeded for {scope}")
 
 
 def _sqlite_conn() -> sqlite3.Connection:
@@ -586,7 +643,12 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/api/auth/session", response_model=SessionCreateResponse)
-async def create_session(payload: SessionCreateRequest) -> SessionCreateResponse:
+async def create_session(payload: SessionCreateRequest, request: Request) -> SessionCreateResponse:
+    _enforce_rate_limit(
+        "auth_session",
+        _request_identity(request),
+        RATE_LIMIT_AUTH_SESSION_PER_WINDOW,
+    )
     now = int(time.time())
     exp = now + SESSION_TTL_SECONDS
     user_id = uuid.uuid4().hex
@@ -622,8 +684,13 @@ async def validate_session(payload: SessionValidateRequest) -> dict[str, Any]:
 
 
 @app.post("/api/chat/translate", response_model=ChatTranslateResponse)
-async def translate_chat(payload: ChatTranslateRequest) -> ChatTranslateResponse:
+async def translate_chat(payload: ChatTranslateRequest, request: Request) -> ChatTranslateResponse:
     session = _validate_token(payload.token)
+    _enforce_rate_limit(
+        "chat_translate",
+        session["user_id"],
+        RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW,
+    )
     usage = _usage_bucket(session["user_id"])
     next_chars = usage["translated_chars"] + len(payload.text)
     if next_chars > MAX_TRANSLATION_CHARS_PER_SESSION:
@@ -645,8 +712,9 @@ async def translate_chat(payload: ChatTranslateRequest) -> ChatTranslateResponse
 
 
 @app.post("/api/chat/tts", response_model=ChatTTSResponse)
-async def tts_chat(payload: ChatTTSRequest) -> ChatTTSResponse:
+async def tts_chat(payload: ChatTTSRequest, request: Request) -> ChatTTSResponse:
     session = _validate_token(payload.token)
+    _enforce_rate_limit("chat_tts", session["user_id"], RATE_LIMIT_CHAT_TTS_PER_WINDOW)
     usage = _usage_bucket(session["user_id"])
     next_chars = usage["tts_chars"] + len(payload.text)
     if next_chars > MAX_TTS_CHARS_PER_SESSION:
@@ -683,6 +751,7 @@ async def session_usage(payload: SessionUsageRequest) -> SessionUsageResponse:
 @app.post("/api/rooms/register", response_model=RoomRegisterResponse)
 async def register_room(payload: RoomRegisterRequest) -> RoomRegisterResponse:
     session = _validate_token(payload.token)
+    _enforce_rate_limit("rooms", session["user_id"], RATE_LIMIT_ROOMS_PER_WINDOW)
     room_code = _normalize_room_code(payload.room_code)
     if len(room_code) < 4:
         raise HTTPException(status_code=400, detail="room code too short")
@@ -707,7 +776,8 @@ async def register_room(payload: RoomRegisterRequest) -> RoomRegisterResponse:
 
 @app.post("/api/rooms/resolve", response_model=RoomResolveResponse)
 async def resolve_room(payload: RoomResolveRequest) -> RoomResolveResponse:
-    _validate_token(payload.token)
+    session = _validate_token(payload.token)
+    _enforce_rate_limit("rooms", session["user_id"], RATE_LIMIT_ROOMS_PER_WINDOW)
     room_code = _normalize_room_code(payload.room_code)
     return _resolve_room_participants(room_code, payload.requester_peer_id)
 
@@ -762,6 +832,11 @@ async def subscribe_room(
 @app.post("/api/telemetry/events", response_model=TelemetryBatchResponse)
 async def ingest_telemetry(payload: TelemetryBatchRequest) -> TelemetryBatchResponse:
     session = _validate_token(payload.token)
+    _enforce_rate_limit(
+        "telemetry",
+        session["user_id"],
+        RATE_LIMIT_TELEMETRY_PER_WINDOW,
+    )
     accepted = 0
     for event in payload.events:
         accepted_event = _append_telemetry_event(
@@ -864,6 +939,7 @@ async def ws_asr_mt(websocket: WebSocket) -> None:
     asr_backend = build_asr_backend()
     mt_backend = build_mt_backend()
     session_config: Optional[SessionConfig] = None
+    ws_identity = _websocket_identity(websocket)
     pending_partials: list[str] = []
     first_pending_partial_ts_ms: Optional[int] = None
     pending_chars = 0
@@ -905,6 +981,12 @@ async def ws_asr_mt(websocket: WebSocket) -> None:
 
     try:
         while True:
+            if _is_rate_limited("ws_messages", ws_identity, RATE_LIMIT_WS_MESSAGES_PER_WINDOW):
+                await websocket.send_text(
+                    json.dumps({"type": "error", "message": "rate limit exceeded"})
+                )
+                await websocket.close(code=1013)
+                return
             message = await websocket.receive()
             if message.get("type") == "websocket.disconnect":
                 raise WebSocketDisconnect

@@ -15,6 +15,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - micro-batching de traducciones parciales en WS para reducir inferencias MT,
   - smart chunking adaptativo de audio (`fast/normal/stable`) segun jitter/perdida/latencia,
   - cuotas por sesion para traduccion y TTS,
+  - guardrails anti-abuso con rate limiting por IP/sesion en endpoints criticos y WS,
   - endpoint de consumo de sesion (`/api/sessions/usage`),
   - UI con consumo de cuota en llamada,
   - doble ruta ASR seleccionable por entorno (`vosk` streaming vs `faster-whisper` calidad).
@@ -29,6 +30,14 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
     - `MT_MICRO_BATCH_WINDOW_MS`
     - `MT_MICRO_BATCH_MAX_ITEMS`
     - `MT_MICRO_BATCH_MAX_CHARS`
+  - controles anti-abuso:
+    - `RATE_LIMIT_WINDOW_SECONDS`
+    - `RATE_LIMIT_AUTH_SESSION_PER_WINDOW`
+    - `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW`
+    - `RATE_LIMIT_CHAT_TTS_PER_WINDOW`
+    - `RATE_LIMIT_ROOMS_PER_WINDOW`
+    - `RATE_LIMIT_TELEMETRY_PER_WINDOW`
+    - `RATE_LIMIT_WS_MESSAGES_PER_WINDOW`
   - seleccion ASR por `ASR_BACKEND` (`mock|vosk|faster-whisper`) con aliases `streaming|quality`.
   - buckets de uso en memoria por `user_id`.
   - cache en memoria por par de idiomas + texto.
@@ -60,6 +69,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - Cache reduce coste y latencia para textos repetidos.
 - Micro-batching reduce coste CPU en rachas de parciales seguidos.
 - Chunking adaptativo evita backlog en red degradada y reduce TTFC cuando la red es estable.
+- Rate limits limitan abuso y picos de trafico sobre endpoints sensibles.
 
 ## 6. Criterios de aceptacion
 - [x] TTS chat usa backend y no SDK cliente.
@@ -68,5 +78,6 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - [x] Ruta ASR se puede elegir por entorno (`streaming` o `quality`).
 - [x] Backend MT soporta micro-batching configurable para parciales WS.
 - [x] Smart chunking de audio se adapta en runtime sin reiniciar llamada.
+- [x] Guardrails anti-abuso aplican limites de peticiones/mensajes configurables.
 - [x] Variables de entorno y README actualizados.
 - [x] `npm run lint` y `npm run build` en verde.

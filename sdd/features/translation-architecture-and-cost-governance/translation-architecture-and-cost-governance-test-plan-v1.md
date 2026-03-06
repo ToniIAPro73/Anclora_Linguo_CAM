@@ -46,6 +46,14 @@
 - Durante llamada, forzar condiciones de red mala (perdida/jitter) y luego red estable.
 - Esperado: evento `audio_chunk_profile_changed` cambia entre `stable`/`normal`/`fast` y el stream no se reinicia.
 
+11. Rate limit chat translate
+- Configurar `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW=2` y ejecutar 3 requests en <60s.
+- Esperado: tercera request responde 429.
+
+12. Rate limit ws messages
+- Configurar `RATE_LIMIT_WS_MESSAGES_PER_WINDOW` bajo y enviar audio continuo.
+- Esperado: backend emite error y cierra WS con codigo de overload.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

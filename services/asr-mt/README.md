@@ -37,6 +37,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `MT_MICRO_BATCH_WINDOW_MS` = ventana de micro-batch para parciales WS (default `35`)
 - `MT_MICRO_BATCH_MAX_ITEMS` = max parciales por batch (default `4`)
 - `MT_MICRO_BATCH_MAX_CHARS` = max caracteres acumulados por batch (default `220`)
+- `RATE_LIMIT_WINDOW_SECONDS` = ventana para rate limits (default `60`)
+- `RATE_LIMIT_AUTH_SESSION_PER_WINDOW` = limite de creacion de sesion por IP (default `20`)
+- `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW` = limite translate por sesion (default `120`)
+- `RATE_LIMIT_CHAT_TTS_PER_WINDOW` = limite tts por sesion (default `120`)
+- `RATE_LIMIT_ROOMS_PER_WINDOW` = limite register/resolve de rooms por sesion (default `60`)
+- `RATE_LIMIT_TELEMETRY_PER_WINDOW` = limite de lotes telemetry por sesion (default `240`)
+- `RATE_LIMIT_WS_MESSAGES_PER_WINDOW` = limite de mensajes WS por IP (default `1200`)
 - `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
 - `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
 - `STORAGE_BACKEND` = `memory` (default) o `sqlite`
@@ -71,6 +78,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 El servicio aplica micro-batching de traducciones parciales por WebSocket (ventana corta) y cache por prefijo para reducir inferencias repetidas en MT.
+Tambien aplica rate limits configurables para endpoints criticos y mensajes WS como guardrail anti-abuso.
 
 Para NLLB usa un modelo NLLB y codigos compatibles (se mapean los idiomas mas comunes).
 
