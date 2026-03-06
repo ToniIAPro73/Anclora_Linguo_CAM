@@ -31,6 +31,14 @@
 - Registrar 2 peers en sala, reiniciar backend y repetir registro/resolucion.
 - Verificar que nuevas sesiones de pairing no quedan corruptas tras restart.
 
+7. Endpointing por silencio
+- Hablar una frase corta y pausar (> `min_silence_ms`).
+- Verificar que se emite `final` sin cerrar WS y llega commit remoto.
+
+8. Endpointing adaptativo por red
+- Simular perdida/jitter alto y observar telemetria `endpointing_profile_changed`.
+- Verificar cambio a perfil `aggressive` y menor tiempo hasta commit final.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

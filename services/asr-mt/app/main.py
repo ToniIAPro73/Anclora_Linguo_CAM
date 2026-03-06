@@ -885,6 +885,24 @@ async def handle_text_message(
     if msg_type == "config":
         await websocket.send_text(json.dumps({"type": "ok", "message": "config received"}))
         return
+    if msg_type == "segment_end":
+        final = asr_backend.finalize()
+        session_config = config_provider()
+        if final and session_config:
+            translated = mt_backend.translate(
+                final, session_config.source_lang, session_config.target_lang
+            )
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "final",
+                        "text": final,
+                        "translated_text": translated,
+                        "timestamp_ms": int(time.time() * 1000),
+                    }
+                )
+            )
+        return
     if msg_type == "end":
         final = asr_backend.finalize()
         session_config = config_provider()

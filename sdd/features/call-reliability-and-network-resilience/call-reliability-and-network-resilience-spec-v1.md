@@ -14,6 +14,8 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - estado de conexion en UI para signaling y subtitulos,
   - reconexion de PeerJS en `disconnected`,
   - datachannels duales para subtitulos (`captions_hyp` no fiable y `captions_commit` fiable),
+  - VAD con endpointing configurable (`min_speech_ms`, `min_silence_ms`, `max_segment_ms`, `hangover_ms`),
+  - ajuste adaptativo de endpointing segun jitter/perdida en tiempo real,
   - persistencia opcional de salas con `STORAGE_BACKEND=sqlite` para sobrevivir reinicios,
   - avisos operativos de red,
   - parametrizacion y verificacion de TURN/ICE por entorno.
@@ -26,12 +28,19 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - estados `idle/connecting/connected/reconnecting/error`.
   - reconexion automatica con max 5 intentos y backoff.
   - fix de restart por cambio de idioma.
+  - propagacion de eventos `segment_end` desde AudioWorklet a backend ASR/MT.
 - `App.tsx`:
   - estado de signaling PeerJS (`connected/reconnecting/down`).
   - reconexion `peer.reconnect()` en `disconnected`.
   - envio de hipotesis en canal no fiable (`maxRetransmits:0`) y commits en canal fiable.
+  - perfil de endpointing dinamico (`normal/aggressive`) segun `jitterMs` y `packetLossPct`.
   - avisos de red y degradacion en runtime.
   - bloqueo de inicio de llamada si signaling no esta conectado.
+- `audio-worklet-processor.js`:
+  - VAD por chunk con corte por silencio y por duracion maxima de segmento.
+  - hangover de silencio para no truncar finales de palabra.
+- `services/asr-mt/app/main.py`:
+  - nuevo mensaje WS `segment_end` para emitir `final` sin cerrar websocket.
 - `components/CallHeader.tsx`:
   - nuevos indicadores de salud de signaling y subtitulado.
 - `constants.ts`:
@@ -46,6 +55,8 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
 - [x] PeerJS intenta reconexion tras perdida de signaling.
 - [x] Hipotesis de subtitulos priorizan latencia con canal no fiable.
 - [x] Commits finales de subtitulos viajan por canal fiable.
+- [x] Endpointing por silencio/max-segment fuerza commits sin cerrar stream.
+- [x] Endpointing se vuelve mas agresivo cuando suben jitter/perdida.
 - [x] UI expone estado de red para troubleshooting operativo.
 - [x] Configuracion ICE/TURN queda parametrizada por entorno.
 - [x] `npm run lint` y `npm run build` en verde.

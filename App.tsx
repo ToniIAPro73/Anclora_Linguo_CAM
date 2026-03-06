@@ -7,6 +7,10 @@ import {
   ASR_MT_HTTP_URL,
   AUDIO_CHUNK_FRAMES,
   VAD_THRESHOLD,
+  VAD_MIN_SPEECH_MS,
+  VAD_MIN_SILENCE_MS,
+  VAD_MAX_SEGMENT_MS,
+  VAD_HANGOVER_MS,
   PEER_SERVER_HOST,
   PEER_SERVER_PORT,
   PEER_SERVER_PATH,
@@ -420,6 +424,7 @@ const App: React.FC = () => {
   const captionLagSamplesRef = useRef<number[]>([]);
   const hypothesisSentRef = useRef(0);
   const hypothesisDroppedRef = useRef(0);
+  const endpointProfileRef = useRef<'normal' | 'aggressive'>('normal');
 
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
@@ -438,6 +443,10 @@ const App: React.FC = () => {
     sampleRate: SAMPLE_RATE,
     chunkFrames: AUDIO_CHUNK_FRAMES,
     vadThreshold: VAD_THRESHOLD,
+    minSpeechMs: VAD_MIN_SPEECH_MS,
+    minSilenceMs: VAD_MIN_SILENCE_MS,
+    maxSegmentMs: VAD_MAX_SEGMENT_MS,
+    hangoverMs: VAD_HANGOVER_MS,
     sourceLang: myLang,
     targetLang: remoteLang,
     onSubtitle: (text, isFinal) => {
@@ -497,6 +506,7 @@ const App: React.FC = () => {
     connectionState: translationConnectionState,
     reconnectAttempts: translationReconnectAttempts,
     setSendActive,
+    setEndpointingConfig,
     start: startStreaming,
     stop: stopStreaming,
   } = streaming;
@@ -814,6 +824,41 @@ const App: React.FC = () => {
       setNetworkNotice('');
     }
   }, [status, translationConnectionState, translationReconnectAttempts]);
+
+  useEffect(() => {
+    if (status !== CallStatus.ACTIVE) return;
+    const jitterMs = webrtcStats.jitterMs ?? 0;
+    const lossPct = webrtcStats.packetLossPct ?? 0;
+    const shouldBeAggressive = jitterMs >= 35 || lossPct >= 3;
+    const nextProfile: 'normal' | 'aggressive' = shouldBeAggressive ? 'aggressive' : 'normal';
+    if (endpointProfileRef.current === nextProfile) return;
+    endpointProfileRef.current = nextProfile;
+    if (nextProfile === 'aggressive') {
+      setEndpointingConfig({
+        minSpeechMs: 160,
+        minSilenceMs: 260,
+        maxSegmentMs: 1800,
+        hangoverMs: 80,
+      });
+    } else {
+      setEndpointingConfig({
+        minSpeechMs: VAD_MIN_SPEECH_MS,
+        minSilenceMs: VAD_MIN_SILENCE_MS,
+        maxSegmentMs: VAD_MAX_SEGMENT_MS,
+        hangoverMs: VAD_HANGOVER_MS,
+      });
+    }
+    trackTelemetryRef.current('endpointing_profile_changed', {
+      profile: nextProfile,
+      jitter_ms: jitterMs,
+      packet_loss_pct: lossPct,
+    });
+  }, [
+    setEndpointingConfig,
+    status,
+    webrtcStats.jitterMs,
+    webrtcStats.packetLossPct,
+  ]);
 
   const recordingStopRef = useRef(recording.stopRecording);
   const streamingStartRef = useRef(startStreaming);

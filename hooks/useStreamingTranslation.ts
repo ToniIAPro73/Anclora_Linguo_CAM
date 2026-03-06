@@ -5,6 +5,10 @@ interface StreamingTranslationOptions {
   sampleRate: number;
   chunkFrames: number;
   vadThreshold: number;
+  minSpeechMs: number;
+  minSilenceMs: number;
+  maxSegmentMs: number;
+  hangoverMs: number;
   sourceLang: string;
   targetLang: string;
   onSubtitle: (text: string, isFinal: boolean) => void;
@@ -21,6 +25,10 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     sampleRate,
     chunkFrames,
     vadThreshold,
+    minSpeechMs,
+    minSilenceMs,
+    maxSegmentMs,
+    hangoverMs,
     sourceLang,
     targetLang,
     onSubtitle,
@@ -39,6 +47,8 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
   const startedRef = useRef(false);
   const intentionalStopRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
+  const lastPartialTextRef = useRef('');
+  const lastCommittedTextRef = useRef('');
 
   const sourceLangRef = useRef(sourceLang);
   const targetLangRef = useRef(targetLang);
@@ -122,7 +132,17 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
           if (payload.type !== 'partial' && payload.type !== 'final') return;
           const translatedText = payload.translated_text || payload.text;
           if (!translatedText) return;
+          if (payload.type === 'final' && translatedText === lastCommittedTextRef.current) {
+            lastPartialTextRef.current = '';
+            return;
+          }
           onSubtitle(translatedText, payload.type === 'final');
+          if (payload.type === 'partial') {
+            lastPartialTextRef.current = translatedText;
+          } else {
+            lastCommittedTextRef.current = translatedText;
+            lastPartialTextRef.current = '';
+          }
           if (lastChunkSentAtRef.current) {
             const nextLatency = Math.round(performance.now() - lastChunkSentAtRef.current);
             setLatencyMs(nextLatency);
@@ -182,7 +202,17 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
         if (payload.type !== 'partial' && payload.type !== 'final') return;
         const translatedText = payload.translated_text || payload.text;
         if (!translatedText) return;
+        if (payload.type === 'final' && translatedText === lastCommittedTextRef.current) {
+          lastPartialTextRef.current = '';
+          return;
+        }
         onSubtitle(translatedText, payload.type === 'final');
+        if (payload.type === 'partial') {
+          lastPartialTextRef.current = translatedText;
+        } else {
+          lastCommittedTextRef.current = translatedText;
+          lastPartialTextRef.current = '';
+        }
         if (lastChunkSentAtRef.current) {
           const nextLatency = Math.round(performance.now() - lastChunkSentAtRef.current);
           setLatencyMs(nextLatency);
@@ -220,15 +250,31 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
 
     const source = inputCtx.createMediaStreamSource(stream);
     const workletNode = new AudioWorkletNode(inputCtx, 'pcm-worklet', {
-      processorOptions: { chunkSize: chunkFrames, vadThreshold },
+      processorOptions: {
+        chunkSize: chunkFrames,
+        vadThreshold,
+        minSpeechMs,
+        minSilenceMs,
+        maxSegmentMs,
+        hangoverMs,
+      },
     });
     const zeroGain = inputCtx.createGain();
     zeroGain.gain.value = 0;
 
     workletNode.port.onmessage = (event) => {
-      if (event.data?.type !== 'audio') return;
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (event.data?.type === 'segment_end') {
+        ws.send(JSON.stringify({ type: 'segment_end', reason: event.data.reason || 'vad' }));
+        if (lastPartialTextRef.current && lastPartialTextRef.current !== lastCommittedTextRef.current) {
+          onSubtitle(lastPartialTextRef.current, true);
+          lastCommittedTextRef.current = lastPartialTextRef.current;
+          lastPartialTextRef.current = '';
+        }
+        return;
+      }
+      if (event.data?.type !== 'audio') return;
       ws.send(event.data.payload);
       lastChunkSentAtRef.current = performance.now();
     };
@@ -240,7 +286,19 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     workletNodeRef.current = workletNode;
 
     createWebSocket();
-  }, [chunkFrames, cleanupWs, clearReconnectTimer, createWebSocket, sampleRate, vadThreshold]);
+  }, [
+    chunkFrames,
+    cleanupWs,
+    clearReconnectTimer,
+    createWebSocket,
+    hangoverMs,
+    maxSegmentMs,
+    minSilenceMs,
+    minSpeechMs,
+    onSubtitle,
+    sampleRate,
+    vadThreshold,
+  ]);
 
   const stop = useCallback(() => {
     intentionalStopRef.current = true;
@@ -264,6 +322,8 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     }
 
     lastChunkSentAtRef.current = null;
+    lastPartialTextRef.current = '';
+    lastCommittedTextRef.current = '';
     streamRef.current = null;
     setConnectionState('idle');
     setReconnectAttempts(0);
@@ -276,6 +336,18 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     start(stream);
   }, [start, stop]);
 
+  const setEndpointingConfig = useCallback((config: {
+    minSpeechMs?: number;
+    minSilenceMs?: number;
+    maxSegmentMs?: number;
+    hangoverMs?: number;
+    vadThreshold?: number;
+  }) => {
+    const node = workletNodeRef.current;
+    if (!node) return;
+    node.port.postMessage({ type: 'config', ...config });
+  }, []);
+
   useEffect(() => {
     sourceLangRef.current = sourceLang;
     targetLangRef.current = targetLang;
@@ -287,6 +359,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     connectionState,
     reconnectAttempts,
     setSendActive,
+    setEndpointingConfig,
     start,
     stop,
     restartIfReady,
