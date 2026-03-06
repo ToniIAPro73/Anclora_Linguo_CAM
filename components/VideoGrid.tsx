@@ -3,8 +3,10 @@ import React from 'react';
 interface VideoGridProps {
   remoteVideoRef: React.RefObject<HTMLVideoElement>;
   localVideoRef: React.RefObject<HTMLVideoElement>;
-  remoteSubtitle: string;
-  localSubtitle: string;
+  remoteSubtitleConfirmed: string;
+  remoteSubtitleHypothesis: string;
+  localSubtitleConfirmed: string;
+  localSubtitleHypothesis: string;
   isScreenSharing: boolean;
   isPttPressed: boolean;
   isHandsFree: boolean;
@@ -13,8 +15,10 @@ interface VideoGridProps {
 const VideoGrid: React.FC<VideoGridProps> = ({
   remoteVideoRef,
   localVideoRef,
-  remoteSubtitle,
-  localSubtitle,
+  remoteSubtitleConfirmed,
+  remoteSubtitleHypothesis,
+  localSubtitleConfirmed,
+  localSubtitleHypothesis,
   isScreenSharing,
   isPttPressed,
   isHandsFree,
@@ -25,11 +29,14 @@ const VideoGrid: React.FC<VideoGridProps> = ({
         <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
         <div className="absolute top-4 left-4 bg-black/50 px-3 py-1 rounded-lg text-xs font-bold text-white">Remote Participant</div>
 
-        {remoteSubtitle && (
+        {(remoteSubtitleConfirmed || remoteSubtitleHypothesis) && (
           <div className="subtitle-area">
             <div className="subtitle-bubble">
               <p className="text-xl md:text-3xl font-bold text-white tracking-wide text-center leading-tight">
-                {remoteSubtitle}
+                <span>{remoteSubtitleConfirmed}</span>
+                {remoteSubtitleHypothesis ? (
+                  <span className="opacity-60 ml-2">{remoteSubtitleHypothesis}</span>
+                ) : null}
               </p>
             </div>
           </div>
@@ -48,11 +55,14 @@ const VideoGrid: React.FC<VideoGridProps> = ({
           {isScreenSharing ? 'Sharing Screen' : 'You (Host)'}
         </div>
 
-        {localSubtitle && (
+        {(localSubtitleConfirmed || localSubtitleHypothesis) && (
           <div className="subtitle-area">
             <div className="subtitle-bubble opacity-60 scale-90">
               <p className="text-lg font-bold text-white tracking-wide text-center">
-                {localSubtitle}
+                <span>{localSubtitleConfirmed}</span>
+                {localSubtitleHypothesis ? (
+                  <span className="opacity-60 ml-2">{localSubtitleHypothesis}</span>
+                ) : null}
               </p>
             </div>
           </div>

@@ -33,7 +33,9 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - `App.tsx`
   - `speakMessage` migra a `POST /api/chat/tts`.
   - refresco de consumo de cuota despues de traducir/hablar.
-  - badge de consumo en UI.
+  - estabilizacion de subtitulos con `confirmed_text + hypothesis_text`.
+- `components/VideoGrid.tsx`
+  - render diferenciado de hipotesis (tenue) y texto confirmado.
 
 ## 5. Seguridad y coste
 - Traduccion/TTS pasan por backend autenticado con token firmado.

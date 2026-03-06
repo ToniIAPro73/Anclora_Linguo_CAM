@@ -301,6 +301,51 @@ const percentile = (values: number[], p: number): number | null => {
   return sorted[idx];
 };
 
+const updateCaptionTrack = (
+  prevConfirmed: string,
+  prevLastHypothesis: string,
+  prevStableCount: number,
+  nextText: string,
+  isFinal: boolean,
+): { confirmed: string; hypothesis: string; lastHypothesis: string; stableCount: number } => {
+  if (isFinal) {
+    return {
+      confirmed: nextText.trim(),
+      hypothesis: '',
+      lastHypothesis: '',
+      stableCount: 0,
+    };
+  }
+
+  const normalized = nextText.trim();
+  const stableCount = normalized && normalized === prevLastHypothesis ? prevStableCount + 1 : 1;
+  const shouldCommit = stableCount >= 2 && normalized.length > prevConfirmed.length;
+  if (shouldCommit) {
+    return {
+      confirmed: normalized,
+      hypothesis: '',
+      lastHypothesis: normalized,
+      stableCount,
+    };
+  }
+
+  if (normalized.startsWith(prevConfirmed)) {
+    return {
+      confirmed: prevConfirmed,
+      hypothesis: normalized.slice(prevConfirmed.length).trim(),
+      lastHypothesis: normalized,
+      stableCount,
+    };
+  }
+
+  return {
+    confirmed: prevConfirmed,
+    hypothesis: normalized,
+    lastHypothesis: normalized,
+    stableCount,
+  };
+};
+
 const App: React.FC = () => {
   const [status, setStatus] = useState<CallStatus>(CallStatus.IDLE);
   const [peerId, setPeerId] = useState<string>('');
@@ -313,8 +358,10 @@ const App: React.FC = () => {
   const [isPttPressed, setIsPttPressed] = useState(false);
   const [isHandsFree, setIsHandsFree] = useState(false);
 
-  const [localSubtitle, setLocalSubtitle] = useState('');
-  const [remoteSubtitle, setRemoteSubtitle] = useState('');
+  const [localSubtitleConfirmed, setLocalSubtitleConfirmed] = useState('');
+  const [localSubtitleHypothesis, setLocalSubtitleHypothesis] = useState('');
+  const [remoteSubtitleConfirmed, setRemoteSubtitleConfirmed] = useState('');
+  const [remoteSubtitleHypothesis, setRemoteSubtitleHypothesis] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -363,6 +410,10 @@ const App: React.FC = () => {
   const trackTelemetryRef = useRef<(eventType: string, payload?: TelemetryEventPayload) => void>(
     () => undefined,
   );
+  const localSubtitleConfirmedRef = useRef('');
+  const remoteSubtitleConfirmedRef = useRef('');
+  const localSubtitleTrackRef = useRef({ lastHypothesis: '', stableCount: 0 });
+  const remoteSubtitleTrackRef = useRef({ lastHypothesis: '', stableCount: 0 });
   const callStartedAtRef = useRef<number | null>(null);
   const firstRemoteSubtitleAtRef = useRef<number | null>(null);
   const captionLagSamplesRef = useRef<number[]>([]);
@@ -391,7 +442,20 @@ const App: React.FC = () => {
     onSubtitle: (text, isFinal) => {
       const originTsMs = Date.now();
       const sequence = subtitleSeqRef.current++;
-      setLocalSubtitle(text);
+      const next = updateCaptionTrack(
+        localSubtitleConfirmedRef.current,
+        localSubtitleTrackRef.current.lastHypothesis,
+        localSubtitleTrackRef.current.stableCount,
+        text,
+        isFinal,
+      );
+      localSubtitleTrackRef.current = {
+        lastHypothesis: next.lastHypothesis,
+        stableCount: next.stableCount,
+      };
+      localSubtitleConfirmedRef.current = next.confirmed;
+      setLocalSubtitleConfirmed(next.confirmed);
+      setLocalSubtitleHypothesis(next.hypothesis);
       if (!isFinal) {
         hypothesisSentRef.current += 1;
       }
@@ -417,7 +481,12 @@ const App: React.FC = () => {
         }
       }
       if (isFinal) {
-        setTimeout(() => setLocalSubtitle(''), 3000);
+        setTimeout(() => {
+          localSubtitleConfirmedRef.current = '';
+          setLocalSubtitleConfirmed('');
+          setLocalSubtitleHypothesis('');
+          localSubtitleTrackRef.current = { lastHypothesis: '', stableCount: 0 };
+        }, 3000);
       }
     },
   });
@@ -435,6 +504,8 @@ const App: React.FC = () => {
   const myLangName = SUPPORTED_LANGUAGES.find((l) => l.code === myLang)?.name || myLang;
   const remoteLangName = SUPPORTED_LANGUAGES.find((l) => l.code === remoteLang)?.name || remoteLang;
   const ui = UI_TEXTS[uiLocale];
+  const localSubtitle = `${localSubtitleConfirmed} ${localSubtitleHypothesis}`.trim();
+  const remoteSubtitle = `${remoteSubtitleConfirmed} ${remoteSubtitleHypothesis}`.trim();
 
   const recording = useRecording({
     localVideoRef,
@@ -482,9 +553,31 @@ const App: React.FC = () => {
         ttfc_ms: firstRemoteSubtitleAtRef.current - callStartedAtRef.current,
       });
     }
-    setRemoteSubtitle(text);
+    const next = updateCaptionTrack(
+      remoteSubtitleConfirmedRef.current,
+      remoteSubtitleTrackRef.current.lastHypothesis,
+      remoteSubtitleTrackRef.current.stableCount,
+      text,
+      Boolean(payload.is_final),
+    );
+    remoteSubtitleTrackRef.current = {
+      lastHypothesis: next.lastHypothesis,
+      stableCount: next.stableCount,
+    };
+    remoteSubtitleConfirmedRef.current = next.confirmed;
+    setRemoteSubtitleConfirmed(next.confirmed);
+    setRemoteSubtitleHypothesis(next.hypothesis);
     const subtitleTimeout = payload.is_final ? 4000 : 1800;
-    setTimeout(() => setRemoteSubtitle((prev) => (prev === text ? '' : prev)), subtitleTimeout);
+    setTimeout(() => {
+      if (payload.is_final) {
+        remoteSubtitleConfirmedRef.current = '';
+        setRemoteSubtitleConfirmed('');
+        setRemoteSubtitleHypothesis('');
+        remoteSubtitleTrackRef.current = { lastHypothesis: '', stableCount: 0 };
+      } else if (remoteSubtitleTrackRef.current.lastHypothesis === next.lastHypothesis) {
+        setRemoteSubtitleHypothesis('');
+      }
+    }, subtitleTimeout);
   }, []);
 
   const setupCaptionChannels = useCallback((call: any, isInitiator: boolean) => {
@@ -570,6 +663,14 @@ const App: React.FC = () => {
     setupCaptionChannels(call, false);
     setStatus(CallStatus.ACTIVE);
     setNetworkNotice('');
+    localSubtitleConfirmedRef.current = '';
+    remoteSubtitleConfirmedRef.current = '';
+    localSubtitleTrackRef.current = { lastHypothesis: '', stableCount: 0 };
+    remoteSubtitleTrackRef.current = { lastHypothesis: '', stableCount: 0 };
+    setLocalSubtitleConfirmed('');
+    setLocalSubtitleHypothesis('');
+    setRemoteSubtitleConfirmed('');
+    setRemoteSubtitleHypothesis('');
     callStartedAtRef.current = Date.now();
     firstRemoteSubtitleAtRef.current = null;
     captionLagSamplesRef.current = [];
@@ -1302,8 +1403,14 @@ const App: React.FC = () => {
     setIsScreenSharing(false);
     setIsPttPressed(false);
     setIsHandsFree(false);
-    setLocalSubtitle('');
-    setRemoteSubtitle('');
+    localSubtitleConfirmedRef.current = '';
+    remoteSubtitleConfirmedRef.current = '';
+    localSubtitleTrackRef.current = { lastHypothesis: '', stableCount: 0 };
+    remoteSubtitleTrackRef.current = { lastHypothesis: '', stableCount: 0 };
+    setLocalSubtitleConfirmed('');
+    setLocalSubtitleHypothesis('');
+    setRemoteSubtitleConfirmed('');
+    setRemoteSubtitleHypothesis('');
     setShowSettings(false);
     setRecordingConsentGranted(false);
     consentRegisteredRef.current = false;
@@ -1571,8 +1678,10 @@ const App: React.FC = () => {
           <VideoGrid
             remoteVideoRef={remoteVideoRef}
             localVideoRef={localVideoRef}
-            remoteSubtitle={remoteSubtitle}
-            localSubtitle={localSubtitle}
+            remoteSubtitleConfirmed={remoteSubtitleConfirmed}
+            remoteSubtitleHypothesis={remoteSubtitleHypothesis}
+            localSubtitleConfirmed={localSubtitleConfirmed}
+            localSubtitleHypothesis={localSubtitleHypothesis}
             isScreenSharing={isScreenSharing}
             isPttPressed={isPttPressed}
             isHandsFree={isHandsFree}

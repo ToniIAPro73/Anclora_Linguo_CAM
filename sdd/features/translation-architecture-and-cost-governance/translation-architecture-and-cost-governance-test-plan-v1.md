@@ -22,6 +22,10 @@
 - Traducir el mismo texto varias veces.
 - Esperado: misma salida con latencia reducida y sin error.
 
+5. Subtitle stabilization
+- Durante llamada, forzar habla continua y observar subtitulos parciales.
+- Esperado: el texto confirmado no retrocede y la hipotesis se muestra con estilo tenue.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS
