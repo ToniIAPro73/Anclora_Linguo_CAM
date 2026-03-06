@@ -513,8 +513,15 @@ def _percentile(values: list[int], p: int) -> Optional[int]:
 
 def build_asr_backend() -> ASRBackend:
     backend = os.getenv("ASR_BACKEND", "mock").lower()
+    if backend == "streaming":
+        backend = "vosk"
+    elif backend == "quality":
+        backend = "faster-whisper"
     if backend == "mock":
         return MockASRBackend()
+    if backend == "vosk":
+        from .backends import VoskASRBackend
+        return VoskASRBackend()
     if backend == "faster-whisper":
         from .backends import FasterWhisperASRBackend
         return FasterWhisperASRBackend()

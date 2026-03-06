@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import os
+import json
 
 
 @dataclass
@@ -105,6 +106,79 @@ class FasterWhisperASRBackend(ASRBackend):
         text = " ".join(segment.text.strip() for segment in segments).strip()
         self._buffer = self._np.zeros(0, dtype=self._np.int16)
         return text or None
+
+    def finalize(self) -> Optional[str]:
+        if self._buffer.size == 0:
+            return None
+        audio = self._buffer.astype(self._np.float32) / 32768.0
+        segments, _ = self._model.transcribe(
+            audio,
+            language=None,
+            vad_filter=True,
+        )
+        text = " ".join(segment.text.strip() for segment in segments).strip()
+        self._buffer = self._np.zeros(0, dtype=self._np.int16)
+        return text or None
+
+
+class VoskASRBackend(ASRBackend):
+    def __init__(self) -> None:
+        try:
+            from vosk import KaldiRecognizer, Model, SetLogLevel
+        except ImportError as exc:
+            raise RuntimeError(
+                "vosk is not installed. Install requirements-ml.txt."
+            ) from exc
+
+        self._KaldiRecognizer = KaldiRecognizer
+        self._SetLogLevel = SetLogLevel
+        self._SetLogLevel(-1)
+
+        model_path = os.getenv("VOSK_MODEL_PATH", "").strip()
+        model_name = os.getenv("VOSK_MODEL_NAME", "vosk-model-small-en-us-0.15")
+        if model_path:
+            self._model = Model(model_path=model_path)
+        else:
+            self._model = Model(model_name=model_name)
+        self._recognizer = None
+        self._sample_rate = 16000
+        self._last_partial = ""
+
+    def start(self, config: SessionConfig) -> None:
+        self._sample_rate = config.sample_rate
+        self._recognizer = self._KaldiRecognizer(self._model, self._sample_rate)
+        self._last_partial = ""
+
+    def _extract_text(self, payload_json: str, key: str) -> Optional[str]:
+        try:
+            payload = json.loads(payload_json)
+        except json.JSONDecodeError:
+            return None
+        text = str(payload.get(key, "")).strip()
+        return text or None
+
+    def transcribe_chunk(self, audio_bytes: bytes) -> Optional[str]:
+        if not audio_bytes or self._recognizer is None:
+            return None
+
+        has_final = self._recognizer.AcceptWaveform(audio_bytes)
+        if has_final:
+            text = self._extract_text(self._recognizer.Result(), "text")
+            self._last_partial = text or ""
+            return text
+
+        partial = self._extract_text(self._recognizer.PartialResult(), "partial")
+        if not partial or partial == self._last_partial:
+            return None
+        self._last_partial = partial
+        return partial
+
+    def finalize(self) -> Optional[str]:
+        if self._recognizer is None:
+            return None
+        text = self._extract_text(self._recognizer.FinalResult(), "text")
+        self._last_partial = ""
+        return text
 
 
 class TransformersMTBackend(MTBackend):

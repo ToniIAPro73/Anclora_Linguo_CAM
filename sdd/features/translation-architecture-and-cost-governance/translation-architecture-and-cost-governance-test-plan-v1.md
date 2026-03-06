@@ -26,6 +26,14 @@
 - Durante llamada, forzar habla continua y observar subtitulos parciales.
 - Esperado: el texto confirmado no retrocede y la hipotesis se muestra con estilo tenue.
 
+6. ASR route: streaming (Vosk)
+- Configurar `ASR_BACKEND=streaming`.
+- Esperado: el servicio arranca y emite parciales/finales en WebSocket.
+
+7. ASR route: quality (Faster Whisper)
+- Configurar `ASR_BACKEND=quality`.
+- Esperado: el servicio arranca y mantiene salida de subtitulos sin cambiar contrato WS.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

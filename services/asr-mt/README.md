@@ -25,7 +25,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 ## Configuracion (env)
-- `ASR_BACKEND` = `mock` (default) o `faster-whisper`
+- `ASR_BACKEND` = `mock` (default), `vosk`, `faster-whisper`, `streaming` (alias de `vosk`) o `quality` (alias de `faster-whisper`)
 - `MT_BACKEND` = `mock` o `marian`
 - `LOG_LEVEL` = `info`
 - `ALLOWED_ORIGINS` = lista separada por coma (default `*`)
@@ -43,6 +43,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `ASR_COMPUTE_TYPE` = `int8` (ej. `float16`)
 - `ASR_MIN_CHUNK_MS` = `600`
 - `ASR_MAX_BUFFER_MS` = `30000`
+- `VOSK_MODEL_PATH` = ruta local a modelo Vosk (opcional)
+- `VOSK_MODEL_NAME` = nombre de modelo Vosk descargable (default `vosk-model-small-en-us-0.15`)
 - `MT_MODEL` = `Helsinki-NLP/opus-mt-es-en` o `facebook/nllb-200-distilled-600M`
 - `MT_DEVICE` = `cpu`
 - `MT_MODEL_MAP` = `es-en=Helsinki-NLP/opus-mt-es-en,es-fr=Helsinki-NLP/opus-mt-es-fr`
@@ -56,6 +58,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 El backend `mock` permite probar la canalizacion sin modelos. Para ASR/MT real usa:
 ```bash
 ASR_BACKEND=faster-whisper MT_BACKEND=transformers MT_MODEL=Helsinki-NLP/opus-mt-es-en \
+uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
+
+Ruta low-latency (streaming ASR con Vosk):
+```bash
+ASR_BACKEND=streaming MT_BACKEND=transformers MT_MODEL=Helsinki-NLP/opus-mt-es-en \
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 

@@ -1,6 +1,7 @@
 numpy==1.26.4
 faster-whisper==1.0.3
 ctranslate2==4.4.0
+vosk==0.3.45
 transformers==4.48.3
 sentencepiece==0.2.0
 sacremoses==0.1.1
