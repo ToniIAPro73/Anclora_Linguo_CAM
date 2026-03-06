@@ -17,6 +17,14 @@
 - Consultar `POST /api/telemetry/summary`.
 - Validar conteos agregados esperados.
 
+4. Subtitle E2E metrics
+- Iniciar llamada y generar subtitulos locales/remotos.
+- Colgar llamada y consultar `POST /api/telemetry/summary`.
+- Validar campos:
+  - `ttfc_ms_p50`, `ttfc_ms_p95`
+  - `caption_lag_ms_p50`, `caption_lag_ms_p95`
+  - `dropped_hypothesis_rate_pct_avg`
+
 ## Resultado actual
 - lint: PASS
 - test: PASS

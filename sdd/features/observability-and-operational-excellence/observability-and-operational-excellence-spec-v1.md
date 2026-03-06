@@ -13,6 +13,7 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
   - ingesta backend de eventos de telemetria,
   - resumen agregado por sesion,
   - emision frontend en hitos clave (pre-check, reconexiones, call start/end),
+  - instrumentacion de subtitulos end-to-end (TTFC, caption lag y dropped hypothesis rate),
   - configuracion de limites de eventos por sesion.
 - No incluye:
   - dashboard grafico externo (Grafana/BI).
@@ -21,7 +22,8 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
 - `services/asr-mt/app/main.py`
   - `POST /api/telemetry/events`
   - `POST /api/telemetry/summary`
-  - almacenamiento in-memory acotado por `MAX_TELEMETRY_EVENTS_PER_SESSION`.
+  - almacenamiento in-memory acotado por `MAX_TELEMETRY_EVENTS_PER_SESSION`,
+  - resumen ampliado con percentiles de `ttfc_ms` y `caption_lag_ms`.
 
 ## 4. Cambios frontend
 - `App.tsx`
@@ -35,10 +37,13 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
     - `peer_reconnecting`
     - `subtitle_reconnecting`
     - `subtitle_error`
+    - `caption_ttfc`
+    - `caption_metrics`
     - `call_ended`
 
 ## 5. Criterios de aceptacion
 - [x] Eventos de red/traduccion se envian a backend.
 - [x] Eventos de producto (precheck, call start/end) quedan registrados.
+- [x] Se registran metricas de subtitulos (ttfc, lag, dropped rate) por sesion.
 - [x] Existe endpoint de resumen para operacion.
 - [x] `npm run lint`, `npm run test`, `npm run build` en verde.

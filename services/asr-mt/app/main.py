@@ -224,6 +224,12 @@ class TelemetrySummaryResponse(BaseModel):
     call_ended: int
     reconnect_events: int
     precheck_failures: int
+    caption_metrics_events: int
+    ttfc_ms_p50: Optional[int]
+    ttfc_ms_p95: Optional[int]
+    caption_lag_ms_p50: Optional[int]
+    caption_lag_ms_p95: Optional[int]
+    dropped_hypothesis_rate_pct_avg: Optional[float]
 
 
 def _usage_bucket(user_id: str) -> dict[str, int]:
@@ -276,6 +282,14 @@ def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
         bucket = []
         TELEMETRY_EVENTS[user_id] = bucket
     return bucket
+
+
+def _percentile(values: list[int], p: int) -> Optional[int]:
+    if not values:
+        return None
+    sorted_values = sorted(values)
+    idx = max(0, min(len(sorted_values) - 1, int((p / 100) * len(sorted_values) + 0.9999) - 1))
+    return sorted_values[idx]
 
 
 def build_asr_backend() -> ASRBackend:
@@ -493,12 +507,38 @@ async def telemetry_summary(payload: TelemetrySummaryRequest) -> TelemetrySummar
         if event.get("type") == "precheck_result"
         and not bool(event.get("payload", {}).get("ok", False))
     )
+    caption_metric_events = [event for event in bucket if event.get("type") == "caption_metrics"]
+    ttfc_values: list[int] = []
+    caption_lag_values: list[int] = []
+    dropped_rates: list[float] = []
+    for event in caption_metric_events:
+        payload_data = event.get("payload", {})
+        ttfc_value = payload_data.get("ttfc_ms")
+        if isinstance(ttfc_value, (int, float)) and ttfc_value >= 0:
+            ttfc_values.append(int(ttfc_value))
+        lag_samples = payload_data.get("caption_lag_samples_ms")
+        if isinstance(lag_samples, list):
+            for sample in lag_samples:
+                if isinstance(sample, (int, float)) and sample >= 0:
+                    caption_lag_values.append(int(sample))
+        dropped_rate = payload_data.get("dropped_hypothesis_rate_pct")
+        if isinstance(dropped_rate, (int, float)) and dropped_rate >= 0:
+            dropped_rates.append(float(dropped_rate))
+
     return TelemetrySummaryResponse(
         total_events=len(bucket),
         call_started=call_started,
         call_ended=call_ended,
         reconnect_events=reconnect_events,
         precheck_failures=precheck_failures,
+        caption_metrics_events=len(caption_metric_events),
+        ttfc_ms_p50=_percentile(ttfc_values, 50),
+        ttfc_ms_p95=_percentile(ttfc_values, 95),
+        caption_lag_ms_p50=_percentile(caption_lag_values, 50),
+        caption_lag_ms_p95=_percentile(caption_lag_values, 95),
+        dropped_hypothesis_rate_pct_avg=(
+            round(sum(dropped_rates) / len(dropped_rates), 2) if dropped_rates else None
+        ),
     )
 
 

@@ -294,6 +294,13 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
   },
 };
 
+const percentile = (values: number[], p: number): number | null => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx];
+};
+
 const App: React.FC = () => {
   const [status, setStatus] = useState<CallStatus>(CallStatus.IDLE);
   const [peerId, setPeerId] = useState<string>('');
@@ -356,6 +363,11 @@ const App: React.FC = () => {
   const trackTelemetryRef = useRef<(eventType: string, payload?: TelemetryEventPayload) => void>(
     () => undefined,
   );
+  const callStartedAtRef = useRef<number | null>(null);
+  const firstRemoteSubtitleAtRef = useRef<number | null>(null);
+  const captionLagSamplesRef = useRef<number[]>([]);
+  const hypothesisSentRef = useRef(0);
+  const hypothesisDroppedRef = useRef(0);
 
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
@@ -374,9 +386,20 @@ const App: React.FC = () => {
     sourceLang: myLang,
     targetLang: remoteLang,
     onSubtitle: (text, isFinal) => {
+      const originTsMs = Date.now();
       setLocalSubtitle(text);
+      if (!isFinal) {
+        hypothesisSentRef.current += 1;
+      }
       if (dataConnRef.current && dataConnRef.current.open) {
-        dataConnRef.current.send({ type: 'subtitle', text });
+        dataConnRef.current.send({
+          type: 'subtitle',
+          text,
+          is_final: isFinal,
+          origin_ts_ms: originTsMs,
+        });
+      } else if (!isFinal) {
+        hypothesisDroppedRef.current += 1;
       }
       if (isFinal) {
         setTimeout(() => setLocalSubtitle(''), 3000);
@@ -429,8 +452,28 @@ const App: React.FC = () => {
 
     conn.on('data', (data: any) => {
       if (data.type === 'subtitle') {
+        const originTsMs =
+          typeof data.origin_ts_ms === 'number'
+            ? data.origin_ts_ms
+            : Number(data.origin_ts_ms || 0);
+        if (originTsMs > 0) {
+          const lag = Date.now() - originTsMs;
+          if (lag >= 0 && lag < 120000) {
+            if (captionLagSamplesRef.current.length >= 200) {
+              captionLagSamplesRef.current.shift();
+            }
+            captionLagSamplesRef.current.push(lag);
+          }
+        }
+        if (!firstRemoteSubtitleAtRef.current && callStartedAtRef.current) {
+          firstRemoteSubtitleAtRef.current = Date.now();
+          trackTelemetryRef.current('caption_ttfc', {
+            ttfc_ms: firstRemoteSubtitleAtRef.current - callStartedAtRef.current,
+          });
+        }
         setRemoteSubtitle(data.text);
-        setTimeout(() => setRemoteSubtitle((prev) => (prev === data.text ? '' : prev)), 4000);
+        const subtitleTimeout = data.is_final ? 4000 : 1800;
+        setTimeout(() => setRemoteSubtitle((prev) => (prev === data.text ? '' : prev)), subtitleTimeout);
       } else if (data.type === 'chat') {
         const newMessage: ChatMessage = {
           id: Math.random().toString(36).substring(2, 9),
@@ -459,6 +502,11 @@ const App: React.FC = () => {
   const handleCall = useCallback((call: any, stream: MediaStream) => {
     setStatus(CallStatus.ACTIVE);
     setNetworkNotice('');
+    callStartedAtRef.current = Date.now();
+    firstRemoteSubtitleAtRef.current = null;
+    captionLagSamplesRef.current = [];
+    hypothesisSentRef.current = 0;
+    hypothesisDroppedRef.current = 0;
     trackTelemetryRef.current('call_started', { quality });
     call.on('stream', (remoteStream: MediaStream) => {
       remoteStreamRef.current = remoteStream;
@@ -1074,6 +1122,11 @@ const App: React.FC = () => {
     screenStreamRef.current = null;
     stopMediaStream(remoteStreamRef.current);
     remoteStreamRef.current = null;
+    callStartedAtRef.current = null;
+    firstRemoteSubtitleAtRef.current = null;
+    captionLagSamplesRef.current = [];
+    hypothesisSentRef.current = 0;
+    hypothesisDroppedRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -1091,6 +1144,25 @@ const App: React.FC = () => {
       currentCallRef.current.close();
     }
 
+    const lagSamples = captionLagSamplesRef.current;
+    const p50 = percentile(lagSamples, 50);
+    const p95 = percentile(lagSamples, 95);
+    const droppedRate =
+      hypothesisSentRef.current > 0
+        ? Number(((hypothesisDroppedRef.current / hypothesisSentRef.current) * 100).toFixed(2))
+        : 0;
+    trackTelemetry('caption_metrics', {
+      ttfc_ms:
+        callStartedAtRef.current && firstRemoteSubtitleAtRef.current
+          ? firstRemoteSubtitleAtRef.current - callStartedAtRef.current
+          : -1,
+      caption_lag_p50_ms: p50 ?? -1,
+      caption_lag_p95_ms: p95 ?? -1,
+      caption_lag_samples_ms: lagSamples.slice(-120),
+      hypothesis_sent: hypothesisSentRef.current,
+      hypothesis_dropped: hypothesisDroppedRef.current,
+      dropped_hypothesis_rate_pct: droppedRate,
+    });
     trackTelemetry('call_ended', {
       bitrate_kbps: webrtcStats.bitrateKbps ?? -1,
       packet_loss_pct: webrtcStats.packetLossPct ?? -1,
