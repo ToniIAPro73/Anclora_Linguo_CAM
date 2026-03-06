@@ -22,6 +22,10 @@
 - Colgar llamada en medio de reconexion.
 - Verificar limpieza de streams/canales y retorno a `IDLE`.
 
+5. Datachannel dual de subtitulos
+- Verificar que hipotesis fluyen por `captions_hyp` y pueden perderse sin bloquear cola.
+- Verificar que commits finales llegan por `captions_commit` y se renderizan correctamente.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

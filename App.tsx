@@ -372,6 +372,9 @@ const App: React.FC = () => {
   const peerRef = useRef<Peer | null>(null);
   const currentCallRef = useRef<any>(null);
   const dataConnRef = useRef<any>(null);
+  const captionsHypChannelRef = useRef<RTCDataChannel | null>(null);
+  const captionsCommitChannelRef = useRef<RTCDataChannel | null>(null);
+  const subtitleSeqRef = useRef(0);
 
   const webrtcStats = useWebRtcStats(
     currentCallRef.current?.peerConnection ?? null,
@@ -387,19 +390,31 @@ const App: React.FC = () => {
     targetLang: remoteLang,
     onSubtitle: (text, isFinal) => {
       const originTsMs = Date.now();
+      const sequence = subtitleSeqRef.current++;
       setLocalSubtitle(text);
       if (!isFinal) {
         hypothesisSentRef.current += 1;
       }
-      if (dataConnRef.current && dataConnRef.current.open) {
-        dataConnRef.current.send({
-          type: 'subtitle',
-          text,
-          is_final: isFinal,
-          origin_ts_ms: originTsMs,
-        });
-      } else if (!isFinal) {
-        hypothesisDroppedRef.current += 1;
+      const payload = {
+        type: 'subtitle',
+        text,
+        is_final: isFinal,
+        origin_ts_ms: originTsMs,
+        seq: sequence,
+      };
+
+      if (isFinal) {
+        if (captionsCommitChannelRef.current?.readyState === 'open') {
+          captionsCommitChannelRef.current.send(JSON.stringify(payload));
+        } else if (dataConnRef.current?.open) {
+          dataConnRef.current.send(payload);
+        }
+      } else {
+        if (captionsHypChannelRef.current?.readyState === 'open') {
+          captionsHypChannelRef.current.send(JSON.stringify(payload));
+        } else {
+          hypothesisDroppedRef.current += 1;
+        }
       }
       if (isFinal) {
         setTimeout(() => setLocalSubtitle(''), 3000);
@@ -445,6 +460,78 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleIncomingSubtitle = useCallback((payload: any) => {
+    const text = typeof payload?.text === 'string' ? payload.text : '';
+    if (!text) return;
+    const originTsMs =
+      typeof payload.origin_ts_ms === 'number'
+        ? payload.origin_ts_ms
+        : Number(payload.origin_ts_ms || 0);
+    if (originTsMs > 0) {
+      const lag = Date.now() - originTsMs;
+      if (lag >= 0 && lag < 120000) {
+        if (captionLagSamplesRef.current.length >= 200) {
+          captionLagSamplesRef.current.shift();
+        }
+        captionLagSamplesRef.current.push(lag);
+      }
+    }
+    if (!firstRemoteSubtitleAtRef.current && callStartedAtRef.current) {
+      firstRemoteSubtitleAtRef.current = Date.now();
+      trackTelemetryRef.current('caption_ttfc', {
+        ttfc_ms: firstRemoteSubtitleAtRef.current - callStartedAtRef.current,
+      });
+    }
+    setRemoteSubtitle(text);
+    const subtitleTimeout = payload.is_final ? 4000 : 1800;
+    setTimeout(() => setRemoteSubtitle((prev) => (prev === text ? '' : prev)), subtitleTimeout);
+  }, []);
+
+  const setupCaptionChannels = useCallback((call: any, isInitiator: boolean) => {
+    const pc: RTCPeerConnection | null = call?.peerConnection ?? null;
+    if (!pc) return;
+
+    const bindIncoming = (channel: RTCDataChannel) => {
+      if (channel.label === 'captions_hyp') {
+        captionsHypChannelRef.current = channel;
+      } else if (channel.label === 'captions_commit') {
+        captionsCommitChannelRef.current = channel;
+      } else {
+        return;
+      }
+
+      channel.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload?.type !== 'subtitle') return;
+          handleIncomingSubtitle(payload);
+        } catch {
+          // Ignore malformed caption payloads.
+        }
+      };
+    };
+
+    pc.ondatachannel = (event) => {
+      bindIncoming(event.channel);
+    };
+
+    if (isInitiator) {
+      if (!captionsHypChannelRef.current) {
+        const hyp = pc.createDataChannel('captions_hyp', {
+          ordered: false,
+          maxRetransmits: 0,
+        });
+        bindIncoming(hyp);
+      }
+      if (!captionsCommitChannelRef.current) {
+        const commit = pc.createDataChannel('captions_commit', {
+          ordered: true,
+        });
+        bindIncoming(commit);
+      }
+    }
+  }, [handleIncomingSubtitle]);
+
   const setupDataChannel = useCallback((conn: any) => {
     conn.on('open', () => {
       setNetworkNotice('');
@@ -452,28 +539,8 @@ const App: React.FC = () => {
 
     conn.on('data', (data: any) => {
       if (data.type === 'subtitle') {
-        const originTsMs =
-          typeof data.origin_ts_ms === 'number'
-            ? data.origin_ts_ms
-            : Number(data.origin_ts_ms || 0);
-        if (originTsMs > 0) {
-          const lag = Date.now() - originTsMs;
-          if (lag >= 0 && lag < 120000) {
-            if (captionLagSamplesRef.current.length >= 200) {
-              captionLagSamplesRef.current.shift();
-            }
-            captionLagSamplesRef.current.push(lag);
-          }
-        }
-        if (!firstRemoteSubtitleAtRef.current && callStartedAtRef.current) {
-          firstRemoteSubtitleAtRef.current = Date.now();
-          trackTelemetryRef.current('caption_ttfc', {
-            ttfc_ms: firstRemoteSubtitleAtRef.current - callStartedAtRef.current,
-          });
-        }
-        setRemoteSubtitle(data.text);
-        const subtitleTimeout = data.is_final ? 4000 : 1800;
-        setTimeout(() => setRemoteSubtitle((prev) => (prev === data.text ? '' : prev)), subtitleTimeout);
+        // Legacy fallback path through PeerJS data connection.
+        handleIncomingSubtitle(data);
       } else if (data.type === 'chat') {
         const newMessage: ChatMessage = {
           id: Math.random().toString(36).substring(2, 9),
@@ -497,9 +564,10 @@ const App: React.FC = () => {
         setNetworkNotice('Data channel error detected.');
       }
     });
-  }, []);
+  }, [handleIncomingSubtitle]);
 
   const handleCall = useCallback((call: any, stream: MediaStream) => {
+    setupCaptionChannels(call, false);
     setStatus(CallStatus.ACTIVE);
     setNetworkNotice('');
     callStartedAtRef.current = Date.now();
@@ -507,6 +575,7 @@ const App: React.FC = () => {
     captionLagSamplesRef.current = [];
     hypothesisSentRef.current = 0;
     hypothesisDroppedRef.current = 0;
+    subtitleSeqRef.current = 0;
     trackTelemetryRef.current('call_started', { quality });
     call.on('stream', (remoteStream: MediaStream) => {
       remoteStreamRef.current = remoteStream;
@@ -524,7 +593,7 @@ const App: React.FC = () => {
       trackTelemetryRef.current('call_transport_error');
     });
     streamingStartRef.current(stream);
-  }, [quality]);
+  }, [quality, setupCaptionChannels]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -996,6 +1065,7 @@ const App: React.FC = () => {
       const conn = peerRef.current?.connect(room.target_peer_id);
       if (!call || !conn) throw new Error('Peer connection unavailable');
 
+      setupCaptionChannels(call, true);
       currentCallRef.current = call;
       dataConnRef.current = conn;
       setupDataChannel(conn);
@@ -1122,6 +1192,9 @@ const App: React.FC = () => {
     screenStreamRef.current = null;
     stopMediaStream(remoteStreamRef.current);
     remoteStreamRef.current = null;
+    captionsHypChannelRef.current = null;
+    captionsCommitChannelRef.current = null;
+    subtitleSeqRef.current = 0;
     callStartedAtRef.current = null;
     firstRemoteSubtitleAtRef.current = null;
     captionLagSamplesRef.current = [];

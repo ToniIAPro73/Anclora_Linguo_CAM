@@ -13,6 +13,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - reconexion WS ASR/MT con backoff exponencial,
   - estado de conexion en UI para signaling y subtitulos,
   - reconexion de PeerJS en `disconnected`,
+  - datachannels duales para subtitulos (`captions_hyp` no fiable y `captions_commit` fiable),
   - avisos operativos de red,
   - parametrizacion y verificacion de TURN/ICE por entorno.
 - No incluye:
@@ -27,6 +28,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
 - `App.tsx`:
   - estado de signaling PeerJS (`connected/reconnecting/down`).
   - reconexion `peer.reconnect()` en `disconnected`.
+  - envio de hipotesis en canal no fiable (`maxRetransmits:0`) y commits en canal fiable.
   - avisos de red y degradacion en runtime.
   - bloqueo de inicio de llamada si signaling no esta conectado.
 - `components/CallHeader.tsx`:
@@ -41,6 +43,8 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
 ## 5. Criterios de aceptacion
 - [x] WS de traduccion reintenta automaticamente tras fallo transitorio.
 - [x] PeerJS intenta reconexion tras perdida de signaling.
+- [x] Hipotesis de subtitulos priorizan latencia con canal no fiable.
+- [x] Commits finales de subtitulos viajan por canal fiable.
 - [x] UI expone estado de red para troubleshooting operativo.
 - [x] Configuracion ICE/TURN queda parametrizada por entorno.
 - [x] `npm run lint` y `npm run build` en verde.
