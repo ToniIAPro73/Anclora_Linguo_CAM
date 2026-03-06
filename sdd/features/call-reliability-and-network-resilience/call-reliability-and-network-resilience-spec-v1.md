@@ -17,6 +17,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - VAD con endpointing configurable (`min_speech_ms`, `min_silence_ms`, `max_segment_ms`, `hangover_ms`),
   - ajuste adaptativo de endpointing segun jitter/perdida en tiempo real,
   - modo topologia configurable (`p2p` default, `sfu` por feature flag con redireccion a URL externa),
+  - capa E2EE experimental con Insertable Streams (feature flag + estado operativo en UI),
   - persistencia opcional de salas con `STORAGE_BACKEND=sqlite` para sobrevivir reinicios,
   - avisos operativos de red,
   - parametrizacion y verificacion de TURN/ICE por entorno.
@@ -44,9 +45,14 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - nuevo mensaje WS `segment_end` para emitir `final` sin cerrar websocket.
 - `components/CallHeader.tsx`:
   - nuevos indicadores de salud de signaling y subtitulado.
+  - indicador de estado de E2EE (`off|enabled|unsupported|error`).
 - `constants.ts`:
   - deteccion `HAS_TURN_SERVER` para control de riesgo de NAT.
   - `VITE_CALL_TOPOLOGY` y `VITE_SFU_JOIN_URL` para handoff opcional a SFU externo.
+  - flags `VITE_ENABLE_INSERTABLE_E2EE`, `VITE_REQUIRE_INSERTABLE_E2EE`, `VITE_E2EE_SHARED_KEY`.
+- `utils/e2ee.ts`:
+  - deteccion de soporte insertable streams.
+  - transform XOR ligero para encoded frames (experimental).
 
 ## 4. Cambios de configuracion
 - `.env.example` con variables VITE para signaling, ASR/MT e ICE.
@@ -60,6 +66,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
 - [x] Endpointing por silencio/max-segment fuerza commits sin cerrar stream.
 - [x] Endpointing se vuelve mas agresivo cuando suben jitter/perdida.
 - [x] Topologia de llamada se puede configurar por entorno (`p2p` o `sfu`).
+- [x] E2EE insertable streams se puede activar por entorno y expone estado en UI.
 - [x] UI expone estado de red para troubleshooting operativo.
 - [x] Configuracion ICE/TURN queda parametrizada por entorno.
 - [x] `npm run lint` y `npm run build` en verde.

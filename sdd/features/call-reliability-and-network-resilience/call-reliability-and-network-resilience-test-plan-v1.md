@@ -43,6 +43,11 @@
 - Configurar `VITE_CALL_TOPOLOGY=sfu` y `VITE_SFU_JOIN_URL` valido.
 - Verificar que iniciar llamada abre URL SFU con `room` y `name` en query.
 
+10. E2EE insertable streams
+- Configurar `VITE_ENABLE_INSERTABLE_E2EE=true` y `VITE_E2EE_SHARED_KEY`.
+- Verificar en llamada activa que el header muestra `E2EE ENABLED`.
+- En navegador sin soporte, verificar `E2EE UNSUPPORTED` y telemetria `e2ee_unsupported`.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS

@@ -13,6 +13,9 @@ import {
   VAD_HANGOVER_MS,
   CALL_TOPOLOGY,
   SFU_JOIN_URL,
+  ENABLE_INSERTABLE_E2EE,
+  REQUIRE_INSERTABLE_E2EE,
+  E2EE_SHARED_KEY,
   PEER_SERVER_HOST,
   PEER_SERVER_PORT,
   PEER_SERVER_PATH,
@@ -38,6 +41,7 @@ import {
   stopMediaStream,
 } from './utils/callSession';
 import { toSrt, toVtt, TranscriptEntry } from './utils/transcript';
+import { applyInsertableE2EE, supportsInsertableStreams } from './utils/e2ee';
 
 interface ChatMessage {
   id: string;
@@ -394,6 +398,7 @@ const App: React.FC = () => {
   });
   const [peerConnectionState, setPeerConnectionState] = useState<'connected' | 'reconnecting' | 'down'>('connected');
   const [networkNotice, setNetworkNotice] = useState<string>('');
+  const [e2eeState, setE2eeState] = useState<'off' | 'enabled' | 'unsupported' | 'error'>('off');
 
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [recordingConsentGranted, setRecordingConsentGranted] = useState(false);
@@ -561,6 +566,30 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const tryEnableE2EE = useCallback((call: any) => {
+    if (!ENABLE_INSERTABLE_E2EE) {
+      setE2eeState('off');
+      return;
+    }
+    const pc: RTCPeerConnection | null = call?.peerConnection ?? null;
+    if (!pc) return;
+    if (!supportsInsertableStreams()) {
+      setE2eeState('unsupported');
+      setNetworkNotice('Insertable-stream E2EE is not supported in this browser.');
+      trackTelemetryRef.current('e2ee_unsupported', { topology: CALL_TOPOLOGY });
+      return;
+    }
+    const applied = applyInsertableE2EE(pc, E2EE_SHARED_KEY);
+    if (applied) {
+      setE2eeState('enabled');
+      trackTelemetryRef.current('e2ee_enabled', { topology: CALL_TOPOLOGY });
+    } else {
+      setE2eeState('error');
+      setNetworkNotice('E2EE key missing or invalid. Falling back to transport encryption only.');
+      trackTelemetryRef.current('e2ee_error', { topology: CALL_TOPOLOGY });
+    }
+  }, []);
+
   const handleIncomingSubtitle = useCallback((payload: any) => {
     const text = typeof payload?.text === 'string' ? payload.text : '';
     if (!text) return;
@@ -694,6 +723,7 @@ const App: React.FC = () => {
 
   const handleCall = useCallback((call: any, stream: MediaStream) => {
     setupCaptionChannels(call, false);
+    tryEnableE2EE(call);
     setStatus(CallStatus.ACTIVE);
     setNetworkNotice('');
     localSubtitleConfirmedRef.current = '';
@@ -728,7 +758,7 @@ const App: React.FC = () => {
       trackTelemetryRef.current('call_transport_error');
     });
     streamingStartRef.current(stream);
-  }, [quality, setupCaptionChannels]);
+  }, [quality, setupCaptionChannels, tryEnableE2EE]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -820,6 +850,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (CALL_TOPOLOGY === 'sfu') {
+      if (ENABLE_INSERTABLE_E2EE) {
+        const support = supportsInsertableStreams();
+        setE2eeState(support ? 'enabled' : 'unsupported');
+      }
       setNetworkNotice('SFU topology enabled: call join redirects to external SFU room.');
       return;
     }
@@ -1564,6 +1598,16 @@ const App: React.FC = () => {
   const initiateCall = async () => {
     if (!session) return alert('Authenticate before starting calls.');
     if (CALL_TOPOLOGY === 'sfu') {
+      if (ENABLE_INSERTABLE_E2EE && REQUIRE_INSERTABLE_E2EE && !supportsInsertableStreams()) {
+        alert('This browser does not support Insertable Streams required for E2EE in SFU mode.');
+        trackTelemetry('sfu_e2ee_blocked', { reason: 'unsupported_browser' });
+        return;
+      }
+      if (ENABLE_INSERTABLE_E2EE && REQUIRE_INSERTABLE_E2EE && !E2EE_SHARED_KEY.trim()) {
+        alert('E2EE shared key is required in SFU mode but not configured.');
+        trackTelemetry('sfu_e2ee_blocked', { reason: 'missing_key' });
+        return;
+      }
       const normalizedRoomCode = extractRoomCode(targetPeerId || `ROOM-${peerId}`);
       if (!SFU_JOIN_URL) {
         alert('SFU mode is enabled but VITE_SFU_JOIN_URL is not configured.');
@@ -1732,6 +1776,7 @@ const App: React.FC = () => {
     setRemoteSubtitleHypothesis('');
     setShowSettings(false);
     setRecordingConsentGranted(false);
+    setE2eeState('off');
     consentRegisteredRef.current = false;
 
     currentCallRef.current = null;
@@ -1984,6 +2029,7 @@ const App: React.FC = () => {
         peerConnectionState={peerConnectionState}
         translationConnectionState={translationConnectionState}
         translationReconnectAttempts={translationReconnectAttempts}
+        e2eeState={e2eeState}
       />
 
       {networkNotice ? (

@@ -10,6 +10,7 @@ interface CallHeaderProps {
   peerConnectionState: 'connected' | 'reconnecting' | 'down';
   translationConnectionState: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error';
   translationReconnectAttempts: number;
+  e2eeState: 'off' | 'enabled' | 'unsupported' | 'error';
 }
 
 const CallHeader: React.FC<CallHeaderProps> = ({
@@ -22,6 +23,7 @@ const CallHeader: React.FC<CallHeaderProps> = ({
   peerConnectionState,
   translationConnectionState,
   translationReconnectAttempts,
+  e2eeState,
 }) => {
   const peerStateColor =
     peerConnectionState === 'connected'
@@ -38,6 +40,13 @@ const CallHeader: React.FC<CallHeaderProps> = ({
         : translationConnectionState === 'error'
           ? 'text-red-400 border-red-500/20 bg-red-500/10'
           : 'text-zinc-300 border-zinc-500/20 bg-zinc-500/10';
+
+  const e2eeStateColor =
+    e2eeState === 'enabled'
+      ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/10'
+      : e2eeState === 'unsupported' || e2eeState === 'error'
+        ? 'text-amber-300 border-amber-500/20 bg-amber-500/10'
+        : 'text-zinc-300 border-zinc-500/20 bg-zinc-500/10';
 
   return (
     <>
@@ -68,6 +77,10 @@ const CallHeader: React.FC<CallHeaderProps> = ({
           <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
           SUBTITLES {translationConnectionState.toUpperCase()}
           {translationConnectionState === 'reconnecting' ? ` #${translationReconnectAttempts}` : ''}
+        </div>
+        <div className={`hidden md:flex px-4 py-2 rounded-full text-[10px] font-bold tracking-widest items-center gap-2 border ${e2eeStateColor}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+          E2EE {e2eeState.toUpperCase()}
         </div>
         {isRecording && (
           <div className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-full text-red-400 text-[10px] font-bold tracking-widest flex items-center gap-2 animate-pulse">

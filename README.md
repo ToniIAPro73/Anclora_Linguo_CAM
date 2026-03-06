@@ -27,3 +27,4 @@ Notes:
 - For production-like reliability, configure TURN in `VITE_ICE_SERVERS`.
 - Call onboarding now supports room links (`?room=ROOM-CODE`) and built-in pre-call check.
 - Optional SFU handoff mode: set `VITE_CALL_TOPOLOGY=sfu` and `VITE_SFU_JOIN_URL=https://your-sfu.example/join`.
+- Optional insertable-stream E2EE layer: set `VITE_ENABLE_INSERTABLE_E2EE=true` and `VITE_E2EE_SHARED_KEY=...`.
