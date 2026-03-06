@@ -30,6 +30,11 @@
 - Emitir eventos de telemetria, reiniciar backend y consultar `POST /api/telemetry/summary`.
 - Verificar que el resumen mantiene eventos previos de la sesion.
 
+6. Retencion temporal de telemetria
+- Configurar `TELEMETRY_RETENTION_SECONDS` en una ventana corta.
+- Emitir eventos, esperar expiracion y consultar `POST /api/telemetry/summary`.
+- Verificar que eventos fuera de ventana no aparecen en el resumen.
+
 ## Resultado actual
 - lint: PASS
 - test: PASS

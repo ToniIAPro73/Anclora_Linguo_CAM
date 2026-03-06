@@ -46,6 +46,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `RATE_LIMIT_WS_MESSAGES_PER_WINDOW` = limite de mensajes WS por IP (default `1200`)
 - `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
 - `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
+- `TELEMETRY_RETENTION_SECONDS` = retencion de telemetria por sesion (default `86400`)
 - `STORAGE_BACKEND` = `memory` (default) o `sqlite`
 - `SQLITE_DB_PATH` = ruta del fichero sqlite (default `runtime/asr-mt.sqlite3`)
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)

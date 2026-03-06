@@ -24,6 +24,7 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
   - `POST /api/telemetry/summary`
   - persistencia opcional de eventos en sqlite (`STORAGE_BACKEND=sqlite`),
   - almacenamiento in-memory acotado por `MAX_TELEMETRY_EVENTS_PER_SESSION`,
+  - retencion temporal configurable por `TELEMETRY_RETENTION_SECONDS`,
   - resumen ampliado con percentiles de `ttfc_ms` y `caption_lag_ms`.
 
 ## 4. Cambios frontend
@@ -47,4 +48,5 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
 - [x] Eventos de producto (precheck, call start/end) quedan registrados.
 - [x] Se registran metricas de subtitulos (ttfc, lag, dropped rate) por sesion.
 - [x] Existe endpoint de resumen para operacion.
+- [x] Retencion de telemetria configurable para minimizar datos persistidos.
 - [x] `npm run lint`, `npm run test`, `npm run build` en verde.

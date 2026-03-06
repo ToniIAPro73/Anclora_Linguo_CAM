@@ -72,6 +72,7 @@ TRANSLATION_CACHE: dict[str, str] = {}
 ROOM_PARTICIPANT_TTL_SECONDS = int(os.getenv("ROOM_PARTICIPANT_TTL_SECONDS", "180"))
 ROOM_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {}
 MAX_TELEMETRY_EVENTS_PER_SESSION = int(os.getenv("MAX_TELEMETRY_EVENTS_PER_SESSION", "500"))
+TELEMETRY_RETENTION_SECONDS = int(os.getenv("TELEMETRY_RETENTION_SECONDS", "86400"))
 TELEMETRY_EVENTS: dict[str, list[dict[str, Any]]] = {}
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").strip().lower()
 SQLITE_DB_PATH = Path(os.getenv("SQLITE_DB_PATH", "runtime/asr-mt.sqlite3"))
@@ -446,6 +447,7 @@ def _cleanup_room(room_code: str) -> None:
 
 
 def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
+    threshold_ms = int((time.time() - TELEMETRY_RETENTION_SECONDS) * 1000)
     if STORAGE_BACKEND == "sqlite":
         with SQLITE_LOCK:
             with _sqlite_conn() as conn:
@@ -453,11 +455,11 @@ def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
                     """
                     SELECT call_id, event_type, timestamp_ms, payload_json
                     FROM telemetry_events
-                    WHERE user_id = ?
+                    WHERE user_id = ? AND timestamp_ms >= ?
                     ORDER BY id ASC
                     LIMIT ?
                     """,
-                    (user_id, MAX_TELEMETRY_EVENTS_PER_SESSION),
+                    (user_id, threshold_ms, MAX_TELEMETRY_EVENTS_PER_SESSION),
                 ).fetchall()
         return [
             {
@@ -473,6 +475,8 @@ def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
     if bucket is None:
         bucket = []
         TELEMETRY_EVENTS[user_id] = bucket
+    else:
+        bucket[:] = [event for event in bucket if int(event.get("timestamp_ms", 0)) >= threshold_ms]
     return bucket
 
 
@@ -563,9 +567,14 @@ def _append_telemetry_event(
     timestamp_ms: int,
     payload: dict[str, Any],
 ) -> bool:
+    threshold_ms = int((time.time() - TELEMETRY_RETENTION_SECONDS) * 1000)
     if STORAGE_BACKEND == "sqlite":
         with SQLITE_LOCK:
             with _sqlite_conn() as conn:
+                conn.execute(
+                    "DELETE FROM telemetry_events WHERE user_id = ? AND timestamp_ms < ?",
+                    (user_id, threshold_ms),
+                )
                 current_count = conn.execute(
                     "SELECT COUNT(*) AS count FROM telemetry_events WHERE user_id = ?",
                     (user_id,),
