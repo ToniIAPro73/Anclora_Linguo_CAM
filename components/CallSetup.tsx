@@ -73,10 +73,12 @@ const CallSetup: React.FC<CallSetupProps> = ({
       <div className="min-h-full flex items-start sm:items-center justify-center">
         <div className="w-full max-w-[520px] space-y-3 sm:space-y-5 max-[820px]:space-y-2 animate-in fade-in duration-700">
           <div className="text-center relative">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 max-[820px]:w-12 max-[820px]:h-12 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-3 shadow-2xl shadow-blue-500/20">
-              <i className="fas fa-globe-americas text-2xl sm:text-3xl max-[820px]:text-xl text-white"></i>
+            <div className="flex items-center justify-center gap-3 mb-2 sm:mb-3">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20">
+                <i className="fas fa-globe-americas text-xl sm:text-3xl text-white"></i>
+              </div>
+              <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-none">{uiText.title}</h1>
             </div>
-            <h1 className="text-3xl sm:text-4xl max-[820px]:text-2xl font-extrabold tracking-tight mb-1">{uiText.title}</h1>
             <p className="text-zinc-500 font-medium text-sm max-[820px]:text-xs">{uiText.subtitle}</p>
           </div>
 

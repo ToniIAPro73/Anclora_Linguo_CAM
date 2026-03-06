@@ -101,7 +101,7 @@ const UI_LOCALE_OPTIONS: Array<{ code: UiLocale; label: string }> = [
 
 const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
   es: {
-    appTitle: 'LinguoCam',
+    appTitle: 'Anclora LinguoCAM',
     appSubtitle: 'Comunicación global, sin barreras.',
     yourPeerId: 'Tu ID de Peer',
     iSpeak: 'Yo hablo',
@@ -133,7 +133,7 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     validatingSession: 'Validando sesión segura...',
   },
   en: {
-    appTitle: 'LinguoCam',
+    appTitle: 'Anclora LinguoCAM',
     appSubtitle: 'Global communication, zero barriers.',
     yourPeerId: 'Your Peer ID',
     iSpeak: 'I speak',
@@ -165,7 +165,7 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     validatingSession: 'Validating secure session...',
   },
   de: {
-    appTitle: 'LinguoCam',
+    appTitle: 'Anclora LinguoCAM',
     appSubtitle: 'Globale Kommunikation ohne Barrieren.',
     yourPeerId: 'Deine Peer-ID',
     iSpeak: 'Ich spreche',
@@ -197,7 +197,7 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     validatingSession: 'Sichere Sitzung wird geprüft...',
   },
   ru: {
-    appTitle: 'LinguoCam',
+    appTitle: 'Anclora LinguoCAM',
     appSubtitle: 'Глобальное общение без барьеров.',
     yourPeerId: 'Ваш Peer ID',
     iSpeak: 'Я говорю',
@@ -229,7 +229,7 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     validatingSession: 'Проверка защищенной сессии...',
   },
   fr: {
-    appTitle: 'LinguoCam',
+    appTitle: 'Anclora LinguoCAM',
     appSubtitle: 'Communication mondiale, sans barrières.',
     yourPeerId: 'Votre ID Peer',
     iSpeak: 'Je parle',
@@ -261,7 +261,7 @@ const UI_TEXTS: Record<UiLocale, Record<string, string>> = {
     validatingSession: 'Validation de la session sécurisée...',
   },
   it: {
-    appTitle: 'LinguoCam',
+    appTitle: 'Anclora LinguoCAM',
     appSubtitle: 'Comunicazione globale, zero barriere.',
     yourPeerId: 'Il tuo Peer ID',
     iSpeak: 'Io parlo',
@@ -1176,29 +1176,31 @@ const App: React.FC = () => {
 
   if (status === CallStatus.IDLE || status === CallStatus.CONNECTING) {
     return (
-      <div className="relative">
-        <div className="absolute top-4 left-4 z-10">
-          <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
-            <i className="fas fa-globe text-zinc-300 text-xs"></i>
-            <select
-              value={uiLocale}
-              onChange={(e) => setUiLocale(e.target.value as UiLocale)}
-              className="bg-transparent text-zinc-200 text-sm outline-none"
+      <div className="bg-black min-h-[100dvh]">
+        <div className="px-3 pt-3 sm:px-5 sm:pt-4">
+          <div className="mx-auto w-full max-w-[900px] flex flex-wrap items-center justify-center sm:justify-between gap-2">
+            <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
+              <i className="fas fa-globe text-zinc-300 text-xs"></i>
+              <select
+                value={uiLocale}
+                onChange={(e) => setUiLocale(e.target.value as UiLocale)}
+                className="bg-transparent text-zinc-200 text-sm outline-none"
+              >
+                {UI_LOCALE_OPTIONS.map((locale) => (
+                  <option key={locale.code} value={locale.code} className="bg-zinc-900">
+                    {locale.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={signOut}
+              className="bg-zinc-900 border border-zinc-700 text-xs px-3 py-2 rounded-lg text-zinc-300 hover:text-white max-w-full truncate"
             >
-              {UI_LOCALE_OPTIONS.map((locale) => (
-                <option key={locale.code} value={locale.code} className="bg-zinc-900">
-                  {locale.label}
-                </option>
-              ))}
-            </select>
+              {ui.signOut} ({session.displayName})
+            </button>
           </div>
         </div>
-        <button
-          onClick={signOut}
-          className="absolute top-4 right-4 z-10 bg-zinc-900 border border-zinc-700 text-xs px-3 py-2 rounded-lg text-zinc-300 hover:text-white"
-        >
-          {ui.signOut} ({session.displayName})
-        </button>
         <CallSetup
           status={status}
           peerId={peerId}
