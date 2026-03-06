@@ -322,7 +322,7 @@ const App: React.FC = () => {
   const [authRole, setAuthRole] = useState<'agent' | 'investor'>('agent');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [, setUsageSummary] = useState<UsageSummary | null>(null);
   const [isRunningPrecallCheck, setIsRunningPrecallCheck] = useState(false);
   const [preCallStatus, setPreCallStatus] = useState('');
   const [uiLocale, setUiLocale] = useState<UiLocale>(() => {
@@ -488,6 +488,24 @@ const App: React.FC = () => {
     }
     remoteVolumeRef.current = remoteVolume;
   }, [remoteVolume, isMuted]);
+
+  // Re-bind streams after ACTIVE view mounts; avoids blank local preview on mobile/desktop.
+  useEffect(() => {
+    if (status !== CallStatus.ACTIVE) return;
+
+    const localStream = isScreenSharing ? screenStreamRef.current : cameraStreamRef.current;
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.muted = true;
+      localVideoRef.current.play().catch(() => undefined);
+    }
+
+    if (remoteVideoRef.current && remoteStreamRef.current) {
+      remoteVideoRef.current.srcObject = remoteStreamRef.current;
+      remoteVideoRef.current.volume = isMuted ? 0 : remoteVolumeRef.current;
+      remoteVideoRef.current.play().catch(() => undefined);
+    }
+  }, [status, isScreenSharing, isMuted]);
 
   useEffect(() => {
     handsFreeActiveRef.current = isHandsFree;
@@ -1257,12 +1275,6 @@ const App: React.FC = () => {
       >
         {session.displayName} ({session.role})
       </button>
-      {usageSummary ? (
-        <div className="absolute top-14 right-4 z-20 bg-zinc-900/90 border border-zinc-700 text-[11px] px-3 py-1.5 rounded-lg text-zinc-300">
-          MT {usageSummary.translated_chars}/{usageSummary.translated_limit} | TTS {usageSummary.tts_chars}/{usageSummary.tts_limit}
-        </div>
-      ) : null}
-
       <CallHeader
         peerId={peerId}
         qualityLabel={QUALITY_PROFILES[quality].label.split(' ')[0]}
@@ -1276,7 +1288,7 @@ const App: React.FC = () => {
       />
 
       {networkNotice ? (
-        <div className="absolute top-24 left-6 z-50 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-50 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs max-w-[90vw] text-center">
           {networkNotice}
         </div>
       ) : null}
