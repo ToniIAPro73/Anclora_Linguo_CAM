@@ -83,6 +83,12 @@ interface SessionCostSummary {
   estimated_total_cost_eur: number;
 }
 
+interface SessionSloSummary {
+  pass_slo: boolean;
+  ttfc_ms_p95: number | null;
+  caption_lag_ms_p95: number | null;
+}
+
 interface RoomResolveResponse {
   room_code: string;
   participants: number;
@@ -1164,6 +1170,15 @@ const App: React.FC = () => {
     return null;
   }, [apiPost]);
 
+  const fetchSessionSlo = useCallback(async (authToken: string): Promise<SessionSloSummary | null> => {
+    try {
+      return await apiPost<SessionSloSummary>('/api/telemetry/slo', { token: authToken });
+    } catch (error) {
+      console.error('Session SLO error:', error);
+      return null;
+    }
+  }, [apiPost]);
+
   const runCpuProbe = useCallback(() => {
     const probeWindowMs = 250;
     const start = performance.now();
@@ -1926,6 +1941,7 @@ const App: React.FC = () => {
       dropped_hypothesis_rate_pct: droppedRate,
     });
     const sessionCostEur = session?.token ? await fetchSessionCost(session.token) : null;
+    const sessionSlo = session?.token ? await fetchSessionSlo(session.token) : null;
     trackTelemetry('call_ended', {
       bitrate_kbps: webrtcStats.bitrateKbps ?? -1,
       packet_loss_pct: webrtcStats.packetLossPct ?? -1,
@@ -1933,6 +1949,9 @@ const App: React.FC = () => {
       session_cost_estimated_eur: sessionCostEur,
       dropped_audio_chunks: droppedAudioChunks,
       audio_backpressure_active: isBackpressured,
+      slo_pass: sessionSlo?.pass_slo ?? null,
+      slo_ttfc_p95_ms: sessionSlo?.ttfc_ms_p95 ?? null,
+      slo_caption_lag_p95_ms: sessionSlo?.caption_lag_ms_p95 ?? null,
     });
     resetCallState();
   };

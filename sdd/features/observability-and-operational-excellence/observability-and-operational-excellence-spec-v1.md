@@ -22,10 +22,12 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
 - `services/asr-mt/app/main.py`
   - `POST /api/telemetry/events`
   - `POST /api/telemetry/summary`
+  - `POST /api/telemetry/slo`
   - persistencia opcional de eventos en sqlite (`STORAGE_BACKEND=sqlite`),
   - almacenamiento in-memory acotado por `MAX_TELEMETRY_EVENTS_PER_SESSION`,
   - retencion temporal configurable por `TELEMETRY_RETENTION_SECONDS`,
   - sanitizacion de payload (allowlist de tipos, truncado de strings, bloqueo de campos de texto),
+  - evaluacion automatica de SLO por umbrales configurables (`SLO_*`),
   - resumen ampliado con percentiles de `ttfc_ms` y `caption_lag_ms`.
 
 ## 4. Cambios frontend
@@ -42,6 +44,7 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
     - `subtitle_error`
     - `caption_ttfc`
     - `caption_metrics`
+    - enrich de `call_ended` con `slo_pass`, `slo_ttfc_p95_ms`, `slo_caption_lag_p95_ms`
     - `call_ended`
 
 ## 5. Criterios de aceptacion
@@ -51,4 +54,5 @@ Proveer trazabilidad operativa de llamada y traduccion con eventos estructurados
 - [x] Existe endpoint de resumen para operacion.
 - [x] Retencion de telemetria configurable para minimizar datos persistidos.
 - [x] Payload de telemetria minimizado para reducir riesgo de PII.
+- [x] Existe evaluacion automatica de cumplimiento SLO por sesion.
 - [x] `npm run lint`, `npm run test`, `npm run build` en verde.

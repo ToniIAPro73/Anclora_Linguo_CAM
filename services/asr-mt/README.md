@@ -51,6 +51,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
 - `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
 - `TELEMETRY_RETENTION_SECONDS` = retencion de telemetria por sesion (default `86400`)
+- `SLO_TTFC_MS_P50` = umbral SLO TTFC p50 (default `700`)
+- `SLO_TTFC_MS_P95` = umbral SLO TTFC p95 (default `1500`)
+- `SLO_CAPTION_LAG_MS_P95` = umbral SLO caption lag p95 (default `1800`)
+- `SLO_DROPPED_HYPOTHESIS_RATE_PCT` = umbral SLO dropped hypothesis rate (default `25`)
 - `STORAGE_BACKEND` = `memory` (default) o `sqlite`
 - `SQLITE_DB_PATH` = ruta del fichero sqlite (default `runtime/asr-mt.sqlite3`)
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)
@@ -131,6 +135,9 @@ Ingesta eventos de operacion de llamada/reconexion/precheck.
 
 ### `POST /api/telemetry/summary`
 Resumen agregado de eventos de operacion por sesion.
+
+### `POST /api/telemetry/slo`
+Evalua cumplimiento de SLO de subtitulos contra umbrales configurables.
 
 Con `STORAGE_BACKEND=sqlite`, rooms y telemetria sobreviven reinicios del servicio.
 
