@@ -29,5 +29,6 @@ Notes:
 - Optional SFU embedded mode: set `VITE_CALL_TOPOLOGY=sfu` and `VITE_SFU_JOIN_URL=https://your-sfu.example/join` (the room opens inside the active call view).
 - Optional insertable-stream E2EE layer: set `VITE_ENABLE_INSERTABLE_E2EE=true` and `VITE_E2EE_SHARED_KEY=...`.
 - Optional privacy/local MT (chat only): set `VITE_ENABLE_LOCAL_MT_PRIVACY=true`.
+- Optional Bergamot-style in-browser MT provider: expose `window.BergamotTranslator.translate(...)`; app falls back to local glossary when unavailable.
 - CI (`.github/workflows/ci.yml`) runs lint + unit tests + build + Playwright E2E on push/PR.
 - Audio upload backpressure guard can be tuned with `VITE_ASR_WS_MAX_BUFFERED_BYTES`.

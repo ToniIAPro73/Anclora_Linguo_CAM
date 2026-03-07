@@ -47,6 +47,7 @@ import { toSrt, toVtt, TranscriptEntry } from './utils/transcript';
 import { applyInsertableE2EE, supportsInsertableStreams } from './utils/e2ee';
 import { detectLanguageHeuristic } from './utils/languageDetection';
 import { translateLocalText } from './utils/localMt';
+import { translateWithBergamotIfAvailable } from './utils/bergamotMt';
 
 interface ChatMessage {
   id: string;
@@ -1670,12 +1671,19 @@ const App: React.FC = () => {
       const source = msg.sender === 'peer' ? remoteLang : myLang;
       const target = msg.sender === 'peer' ? myLang : remoteLang;
       if (ENABLE_LOCAL_MT_PRIVACY) {
-        const localTranslation = translateLocalText(msg.text, source, target);
+        const localTranslation =
+          (await translateWithBergamotIfAvailable(msg.text, source, target))
+          ?? translateLocalText(msg.text, source, target);
         if (localTranslation) {
           setMessages((prev) =>
             prev.map((m) => (m.id === msg.id ? { ...m, translatedText: localTranslation } : m)),
           );
-          trackTelemetry('local_mt_used', { mode: 'chat_translate', source_lang: source, target_lang: target });
+          trackTelemetry('local_mt_used', {
+            mode: 'chat_translate',
+            source_lang: source,
+            target_lang: target,
+            provider: 'bergamot_or_fallback',
+          });
         }
         return;
       }
@@ -1707,7 +1715,9 @@ const App: React.FC = () => {
       const source = msg.sender === 'peer' ? remoteLang : myLang;
       const target = msg.sender === 'peer' ? myLang : remoteLang;
       if (ENABLE_LOCAL_MT_PRIVACY) {
-        const textToSpeak = translateLocalText(msg.translatedText || msg.text, source, target);
+        const textToSpeak =
+          (await translateWithBergamotIfAvailable(msg.translatedText || msg.text, source, target))
+          ?? translateLocalText(msg.translatedText || msg.text, source, target);
         if (!textToSpeak) return;
         const utterance = new SpeechSynthesisUtterance(textToSpeak);
         utterance.lang = target;
@@ -1716,7 +1726,12 @@ const App: React.FC = () => {
         utterance.onerror = () => setSpeakingMessageId(null);
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
-        trackTelemetry('local_mt_used', { mode: 'chat_tts', source_lang: source, target_lang: target });
+        trackTelemetry('local_mt_used', {
+          mode: 'chat_tts',
+          source_lang: source,
+          target_lang: target,
+          provider: 'bergamot_or_fallback',
+        });
         return;
       }
       const ttsResponse = await apiPost<{ text_to_speak: string; voice_lang: string }>('/api/chat/tts', {
