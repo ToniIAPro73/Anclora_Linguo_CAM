@@ -54,6 +54,10 @@
 - Configurar `VITE_ASR_WS_MAX_BUFFERED_BYTES` bajo y simular red lenta.
 - Esperado: aumento de `dropped_audio_chunks` y eventos `audio_backpressure_started/recovered`.
 
+13. LID automatico en modo auto
+- Configurar `myLang=auto` y hablar frases claras de un idioma soportado.
+- Esperado: emision de evento `auto_language_detected` y fijacion de `myLang`.
+
 11. Rate limit chat translate
 - Configurar `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW=2` y ejecutar 3 requests en <60s.
 - Esperado: tercera request responde 429.

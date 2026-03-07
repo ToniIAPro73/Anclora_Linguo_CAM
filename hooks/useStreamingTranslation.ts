@@ -12,7 +12,7 @@ interface StreamingTranslationOptions {
   hangoverMs: number;
   sourceLang: string;
   targetLang: string;
-  onSubtitle: (text: string, isFinal: boolean) => void;
+  onSubtitle: (text: string, isFinal: boolean, rawText?: string) => void;
 }
 
 type WsConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -147,7 +147,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
             lastPartialTextRef.current = '';
             return;
           }
-          onSubtitle(translatedText, payload.type === 'final');
+          onSubtitle(translatedText, payload.type === 'final', payload.text || translatedText);
           if (payload.type === 'partial') {
             lastPartialTextRef.current = translatedText;
           } else {
@@ -219,7 +219,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
           lastPartialTextRef.current = '';
           return;
         }
-        onSubtitle(translatedText, payload.type === 'final');
+        onSubtitle(translatedText, payload.type === 'final', payload.text || translatedText);
         if (payload.type === 'partial') {
           lastPartialTextRef.current = translatedText;
         } else {
@@ -281,7 +281,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
       if (event.data?.type === 'segment_end') {
         ws.send(JSON.stringify({ type: 'segment_end', reason: event.data.reason || 'vad' }));
         if (lastPartialTextRef.current && lastPartialTextRef.current !== lastCommittedTextRef.current) {
-          onSubtitle(lastPartialTextRef.current, true);
+          onSubtitle(lastPartialTextRef.current, true, lastPartialTextRef.current);
           lastCommittedTextRef.current = lastPartialTextRef.current;
           lastPartialTextRef.current = '';
         }

@@ -43,6 +43,7 @@ import {
 } from './utils/callSession';
 import { toSrt, toVtt, TranscriptEntry } from './utils/transcript';
 import { applyInsertableE2EE, supportsInsertableStreams } from './utils/e2ee';
+import { detectLanguageHeuristic } from './utils/languageDetection';
 
 interface ChatMessage {
   id: string;
@@ -416,6 +417,7 @@ const App: React.FC = () => {
   const [peerConnectionState, setPeerConnectionState] = useState<'connected' | 'reconnecting' | 'down'>('connected');
   const [networkNotice, setNetworkNotice] = useState<string>('');
   const backpressureTelemetryRef = useRef(false);
+  const autoDetectedLanguageRef = useRef<string | null>(null);
   const [e2eeState, setE2eeState] = useState<'off' | 'enabled' | 'unsupported' | 'error'>('off');
 
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -493,7 +495,22 @@ const App: React.FC = () => {
     hangoverMs: VAD_HANGOVER_MS,
     sourceLang: myLang,
     targetLang: remoteLang,
-    onSubtitle: (text, isFinal) => {
+    onSubtitle: (text, isFinal, rawText) => {
+      if (myLang === 'auto' && isFinal) {
+        const detection = detectLanguageHeuristic(rawText || text);
+        if (
+          detection.code !== 'auto'
+          && detection.confidence >= 0.68
+          && autoDetectedLanguageRef.current !== detection.code
+        ) {
+          autoDetectedLanguageRef.current = detection.code;
+          setMyLang(detection.code);
+          trackTelemetryRef.current('auto_language_detected', {
+            detected_lang: detection.code,
+            confidence: detection.confidence,
+          });
+        }
+      }
       const originTsMs = Date.now();
       const sequence = subtitleSeqRef.current++;
       const next = updateCaptionTrack(
@@ -796,6 +813,7 @@ const App: React.FC = () => {
     hypothesisSentRef.current = 0;
     hypothesisDroppedRef.current = 0;
     subtitleSeqRef.current = 0;
+    autoDetectedLanguageRef.current = null;
     trackTelemetryRef.current('call_started', { quality });
     call.on('stream', (remoteStream: MediaStream) => {
       remoteStreamRef.current = remoteStream;
@@ -1896,6 +1914,7 @@ const App: React.FC = () => {
     captionsHypChannelRef.current = null;
     captionsCommitChannelRef.current = null;
     subtitleSeqRef.current = 0;
+    autoDetectedLanguageRef.current = null;
     remoteSubtitleOrderRef.current = { lastHypSeq: -1, lastCommitSeq: -1 };
     seenCaptionIdsRef.current = [];
     callStartedAtRef.current = null;
