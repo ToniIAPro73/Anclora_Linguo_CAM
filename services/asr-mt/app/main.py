@@ -66,6 +66,17 @@ RATE_LIMIT_TELEMETRY_PER_WINDOW = int(
 RATE_LIMIT_WS_MESSAGES_PER_WINDOW = int(
     os.getenv("RATE_LIMIT_WS_MESSAGES_PER_WINDOW", "1200")
 )
+MAX_TELEMETRY_PAYLOAD_KEYS = int(os.getenv("MAX_TELEMETRY_PAYLOAD_KEYS", "24"))
+MAX_TELEMETRY_PAYLOAD_VALUE_CHARS = int(
+    os.getenv("MAX_TELEMETRY_PAYLOAD_VALUE_CHARS", "120")
+)
+TELEMETRY_BLOCKED_FIELDS = {
+    "text",
+    "raw_text",
+    "transcript",
+    "message",
+    "translated_text",
+}
 
 SESSION_USAGE: dict[str, dict[str, int]] = {}
 TRANSLATION_CACHE: dict[str, str] = {}
@@ -124,6 +135,33 @@ def _append_audit_event(event_type: str, payload: dict[str, Any]) -> None:
     }
     with AUDIT_LOG_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(line, ensure_ascii=True) + "\n")
+
+
+def _sanitize_telemetry_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in payload.items():
+        if len(sanitized) >= MAX_TELEMETRY_PAYLOAD_KEYS:
+            break
+        normalized_key = str(key).strip().lower()
+        if not normalized_key or normalized_key in TELEMETRY_BLOCKED_FIELDS:
+            continue
+        if isinstance(value, (bool, int, float)) or value is None:
+            sanitized[normalized_key] = value
+            continue
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if len(trimmed) > MAX_TELEMETRY_PAYLOAD_VALUE_CHARS:
+                trimmed = trimmed[:MAX_TELEMETRY_PAYLOAD_VALUE_CHARS]
+            sanitized[normalized_key] = trimmed
+            continue
+        if isinstance(value, list):
+            compact: list[Any] = []
+            for item in value[:25]:
+                if isinstance(item, (bool, int, float)):
+                    compact.append(item)
+            sanitized[normalized_key] = compact
+            continue
+    return sanitized
 
 
 def _request_identity(request: Request) -> str:
@@ -591,7 +629,7 @@ def _append_telemetry_event(
                         call_id,
                         event_type,
                         timestamp_ms,
-                        json.dumps(payload, ensure_ascii=True),
+                        json.dumps(_sanitize_telemetry_payload(payload), ensure_ascii=True),
                     ),
                 )
                 conn.commit()
@@ -605,7 +643,7 @@ def _append_telemetry_event(
             "call_id": call_id,
             "type": event_type,
             "timestamp_ms": timestamp_ms,
-            "payload": payload,
+            "payload": _sanitize_telemetry_payload(payload),
         }
     )
     return True

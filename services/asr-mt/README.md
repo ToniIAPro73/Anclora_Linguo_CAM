@@ -44,6 +44,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `RATE_LIMIT_ROOMS_PER_WINDOW` = limite register/resolve de rooms por sesion (default `60`)
 - `RATE_LIMIT_TELEMETRY_PER_WINDOW` = limite de lotes telemetry por sesion (default `240`)
 - `RATE_LIMIT_WS_MESSAGES_PER_WINDOW` = limite de mensajes WS por IP (default `1200`)
+- `MAX_TELEMETRY_PAYLOAD_KEYS` = max claves aceptadas por payload de evento (default `24`)
+- `MAX_TELEMETRY_PAYLOAD_VALUE_CHARS` = max longitud de strings en payload (default `120`)
 - `ROOM_PARTICIPANT_TTL_SECONDS` = TTL de participantes en sala (default `180`)
 - `MAX_TELEMETRY_EVENTS_PER_SESSION` = max eventos de telemetria por sesion (default `500`)
 - `TELEMETRY_RETENTION_SECONDS` = retencion de telemetria por sesion (default `86400`)

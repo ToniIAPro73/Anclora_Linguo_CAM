@@ -35,6 +35,10 @@
 - Emitir eventos, esperar expiracion y consultar `POST /api/telemetry/summary`.
 - Verificar que eventos fuera de ventana no aparecen en el resumen.
 
+7. Sanitizacion de payload
+- Emitir evento con claves de texto sensibles (`text`, `translated_text`) y strings largos.
+- Verificar en almacenamiento/resumen que esos campos no se persisten y strings se truncan.
+
 ## Resultado actual
 - lint: PASS
 - test: PASS
