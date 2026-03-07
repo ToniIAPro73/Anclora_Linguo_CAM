@@ -2114,6 +2114,7 @@ const App: React.FC = () => {
           speakingMessageId={speakingMessageId}
           translatingMessageId={translatingMessageId}
           canExportTranscript={transcriptEntries.length > 0}
+          transcriptEntries={transcriptEntries}
           onClose={() => setIsChatOpen(false)}
           onExportVtt={exportTranscriptVtt}
           onExportSrt={exportTranscriptSrt}

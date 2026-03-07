@@ -45,6 +45,7 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
   - boton pre-check y estado inline.
 - `components/ChatSidebar.tsx`
   - controles de export transcript (`VTT`/`SRT`) y estado habilitado/deshabilitado.
+  - panel de transcripcion completo con busqueda y copia.
 - `components/SettingsModal.tsx` + `components/VideoGrid.tsx`
   - toggle `Caption Preview` persistido para mostrar/ocultar hipotesis.
 
@@ -53,5 +54,6 @@ Reducir friccion de acceso a llamada para perfiles no tecnicos usando salas por 
 - [x] Existe enlace compartible de sala.
 - [x] Existe pre-check operativo previo a llamada.
 - [x] Existe export de transcript etiquetado por speaker.
+- [x] Existe panel de transcripcion con filtro de busqueda y boton copiar.
 - [x] Usuario puede ocultar hipotesis de subtitulos (solo commits).
 - [x] `npm run lint` y `npm run build` en verde.

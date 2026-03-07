@@ -34,6 +34,11 @@
 - Abrir `Settings` y desactivar `Caption Preview`.
 - Verificar que en `VideoGrid` solo se renderiza texto confirmado.
 
+7. Panel transcript completo
+- Abrir pestaña `Transcript` en sidebar.
+- Buscar por texto y copiar transcript.
+- Verificar que filtro y copia funcionan sobre entradas de ambos speakers.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS
