@@ -121,6 +121,9 @@ Devuelve consumo de sesion para gobernanza de coste (`translated_chars`, `tts_ch
 ### `POST /api/sessions/cost`
 Devuelve estimacion de coste de sesion a partir de consumo MT/TTS y tarifas configuradas.
 
+### `POST /api/sessions/cost-dashboard`
+Resume coste por llamada de la sesion actual (`total_calls`, `total_estimated_cost_eur`, `recent_calls`).
+
 ### `POST /api/rooms/register`
 Registra presencia de peer autenticado en sala.
 
@@ -139,7 +142,28 @@ Resumen agregado de eventos de operacion por sesion.
 ### `POST /api/telemetry/slo`
 Evalua cumplimiento de SLO de subtitulos contra umbrales configurables.
 
+### `GET /metrics`
+Exporta metricas en formato Prometheus (salud, rooms activas, reconexiones, TTFC/caption lag p95).
+
 Con `STORAGE_BACKEND=sqlite`, rooms y telemetria sobreviven reinicios del servicio.
 
 ### `POST /api/sessions/consent`
 Registra consentimiento explicito de grabacion por `call_id` en audit log append-only.
+
+## Gestion de modelos (checksum + version)
+
+Script local para descargar y verificar artefactos de modelos:
+
+```bash
+cd services/asr-mt
+python scripts/model_manager.py download \
+  --name opus-es-en \
+  --version 1.0.0 \
+  --url https://example.com/model.bin \
+  --output runtime/models/opus-es-en-1.0.0.bin \
+  --sha256 <sha256>
+python scripts/model_manager.py verify
+python scripts/model_manager.py list
+```
+
+El manifiesto se guarda por defecto en `runtime/models-manifest.json`.

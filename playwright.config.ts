@@ -37,7 +37,7 @@ export default defineConfig({
     },
     {
       command:
-        'VITE_ENABLE_E2E_HOOKS=true VITE_ASR_MT_HTTP_URL=http://127.0.0.1:18001 VITE_ASR_MT_WS_URL=ws://127.0.0.1:18001/ws/asr-mt VITE_PEER_SERVER_HOST=127.0.0.1 VITE_PEER_SERVER_PORT=19000 VITE_PEER_SERVER_PATH=/peerjs VITE_PEER_SERVER_SECURE=false npm run dev -- --host 127.0.0.1 --port 4173',
+        'VITE_ENABLE_E2E_HOOKS=true VITE_CALL_TOPOLOGY=p2p VITE_ASR_MT_HTTP_URL=http://127.0.0.1:18001 VITE_ASR_MT_WS_URL=ws://127.0.0.1:18001/ws/asr-mt VITE_PEER_SERVER_HOST=127.0.0.1 VITE_PEER_SERVER_PORT=19000 VITE_PEER_SERVER_PATH=/peerjs VITE_PEER_SERVER_SECURE=false npm run dev -- --host 127.0.0.1 --port 4173',
       url: 'http://127.0.0.1:4173',
       cwd: '.',
       reuseExistingServer: true,

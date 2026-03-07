@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
 from .backends import (
@@ -345,6 +345,27 @@ class SessionCostResponse(BaseModel):
     estimated_total_cost_eur: float
 
 
+class SessionCostDashboardRequest(BaseModel):
+    token: str
+    limit: int = 10
+
+
+class SessionCostDashboardItem(BaseModel):
+    call_id: str
+    timestamp_ms: int
+    estimated_total_cost_eur: float
+    bitrate_kbps: Optional[int]
+    packet_loss_pct: Optional[float]
+    latency_ms: Optional[int]
+
+
+class SessionCostDashboardResponse(BaseModel):
+    total_calls: int
+    total_estimated_cost_eur: float
+    average_cost_per_call_eur: float
+    recent_calls: list[SessionCostDashboardItem]
+
+
 class RoomRegisterRequest(BaseModel):
     token: str
     room_code: str
@@ -550,6 +571,66 @@ def _telemetry_bucket(user_id: str) -> list[dict[str, Any]]:
     return bucket
 
 
+def _telemetry_events_global() -> list[dict[str, Any]]:
+    threshold_ms = int((time.time() - TELEMETRY_RETENTION_SECONDS) * 1000)
+    if STORAGE_BACKEND == "sqlite":
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT user_id, call_id, event_type, timestamp_ms, payload_json
+                    FROM telemetry_events
+                    WHERE timestamp_ms >= ?
+                    ORDER BY id ASC
+                    """,
+                    (threshold_ms,),
+                ).fetchall()
+        return [
+            {
+                "user_id": row["user_id"],
+                "call_id": row["call_id"],
+                "type": row["event_type"],
+                "timestamp_ms": row["timestamp_ms"],
+                "payload": json.loads(row["payload_json"]),
+            }
+            for row in rows
+        ]
+
+    events: list[dict[str, Any]] = []
+    for user_id, bucket in TELEMETRY_EVENTS.items():
+        filtered = [
+            event for event in bucket if int(event.get("timestamp_ms", 0)) >= threshold_ms
+        ]
+        if len(filtered) != len(bucket):
+            TELEMETRY_EVENTS[user_id] = filtered
+        for event in filtered:
+            enriched = dict(event)
+            enriched["user_id"] = user_id
+            events.append(enriched)
+    return events
+
+
+def _active_room_participants_count() -> int:
+    if STORAGE_BACKEND == "sqlite":
+        threshold = int(time.time()) - ROOM_PARTICIPANT_TTL_SECONDS
+        with SQLITE_LOCK:
+            with _sqlite_conn() as conn:
+                conn.execute("DELETE FROM room_presence WHERE last_seen < ?", (threshold,))
+                row = conn.execute("SELECT COUNT(*) AS count FROM room_presence").fetchone()
+                conn.commit()
+        return int(row["count"] if row else 0)
+
+    now = int(time.time())
+    total = 0
+    for room in ROOM_REGISTRY.values():
+        total += sum(
+            1
+            for entry in room.values()
+            if (now - int(entry.get("last_seen", 0))) <= ROOM_PARTICIPANT_TTL_SECONDS
+        )
+    return total
+
+
 def _upsert_room_presence(
     room_code: str,
     peer_id: str,
@@ -738,6 +819,57 @@ def _build_telemetry_summary(bucket: list[dict[str, Any]]) -> TelemetrySummaryRe
     )
 
 
+def _to_metric_value(value: Optional[int | float]) -> str:
+    if value is None:
+        return "nan"
+    return str(value)
+
+
+def _build_prometheus_metrics() -> str:
+    events = _telemetry_events_global()
+    summary = _build_telemetry_summary(events)
+
+    lines = [
+        "# HELP asrmt_up Service health status (1=up).",
+        "# TYPE asrmt_up gauge",
+        "asrmt_up 1",
+        "# HELP asrmt_rooms_active_participants Active room participants currently tracked.",
+        "# TYPE asrmt_rooms_active_participants gauge",
+        f"asrmt_rooms_active_participants {_active_room_participants_count()}",
+        "# HELP asrmt_telemetry_events_total Telemetry events retained in backend storage.",
+        "# TYPE asrmt_telemetry_events_total gauge",
+        f"asrmt_telemetry_events_total {summary.total_events}",
+        "# HELP asrmt_calls_started_total Count of call_started events.",
+        "# TYPE asrmt_calls_started_total counter",
+        f"asrmt_calls_started_total {summary.call_started}",
+        "# HELP asrmt_calls_ended_total Count of call_ended events.",
+        "# TYPE asrmt_calls_ended_total counter",
+        f"asrmt_calls_ended_total {summary.call_ended}",
+        "# HELP asrmt_reconnect_events_total Count of reconnect events.",
+        "# TYPE asrmt_reconnect_events_total counter",
+        f"asrmt_reconnect_events_total {summary.reconnect_events}",
+        "# HELP asrmt_precheck_failures_total Count of failed prechecks.",
+        "# TYPE asrmt_precheck_failures_total counter",
+        f"asrmt_precheck_failures_total {summary.precheck_failures}",
+        "# HELP asrmt_caption_ttfc_ms_p95 95th percentile TTFC in milliseconds.",
+        "# TYPE asrmt_caption_ttfc_ms_p95 gauge",
+        f"asrmt_caption_ttfc_ms_p95 {_to_metric_value(summary.ttfc_ms_p95)}",
+        "# HELP asrmt_caption_lag_ms_p95 95th percentile caption lag in milliseconds.",
+        "# TYPE asrmt_caption_lag_ms_p95 gauge",
+        f"asrmt_caption_lag_ms_p95 {_to_metric_value(summary.caption_lag_ms_p95)}",
+        (
+            "# HELP asrmt_dropped_hypothesis_rate_pct_avg "
+            "Average dropped hypothesis rate percentage."
+        ),
+        "# TYPE asrmt_dropped_hypothesis_rate_pct_avg gauge",
+        (
+            "asrmt_dropped_hypothesis_rate_pct_avg "
+            f"{_to_metric_value(summary.dropped_hypothesis_rate_pct_avg)}"
+        ),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_asr_backend() -> ASRBackend:
     backend = os.getenv("ASR_BACKEND", "mock").lower()
     if backend == "streaming":
@@ -768,6 +900,11 @@ def build_mt_backend() -> MTBackend:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+async def metrics() -> PlainTextResponse:
+    return PlainTextResponse(_build_prometheus_metrics())
 
 
 @app.post("/api/auth/session", response_model=SessionCreateResponse)
@@ -889,6 +1026,55 @@ async def session_cost(payload: SessionCostRequest) -> SessionCostResponse:
         estimated_translation_cost_eur=round(translation_cost, 6),
         estimated_tts_cost_eur=round(tts_cost, 6),
         estimated_total_cost_eur=round(total_cost, 6),
+    )
+
+
+@app.post("/api/sessions/cost-dashboard", response_model=SessionCostDashboardResponse)
+async def session_cost_dashboard(
+    payload: SessionCostDashboardRequest,
+) -> SessionCostDashboardResponse:
+    session = _validate_token(payload.token)
+    bucket = _telemetry_bucket(session["user_id"])
+    call_events = [
+        event for event in bucket if event.get("type") == "call_ended" and event.get("call_id")
+    ]
+    ordered = sorted(call_events, key=lambda event: int(event.get("timestamp_ms", 0)), reverse=True)
+
+    items: list[SessionCostDashboardItem] = []
+    total_cost = 0.0
+    for event in ordered:
+        payload_data = event.get("payload", {})
+        estimated_cost = payload_data.get("session_cost_estimated_eur")
+        if not isinstance(estimated_cost, (int, float)):
+            continue
+        total_cost += float(estimated_cost)
+        latency_raw = payload_data.get("latency_ms")
+        bitrate_raw = payload_data.get("bitrate_kbps")
+        packet_loss_raw = payload_data.get("packet_loss_pct")
+        items.append(
+            SessionCostDashboardItem(
+                call_id=str(event.get("call_id")),
+                timestamp_ms=int(event.get("timestamp_ms", 0)),
+                estimated_total_cost_eur=round(float(estimated_cost), 6),
+                bitrate_kbps=int(bitrate_raw)
+                if isinstance(bitrate_raw, (int, float)) and bitrate_raw >= 0
+                else None,
+                packet_loss_pct=round(float(packet_loss_raw), 2)
+                if isinstance(packet_loss_raw, (int, float)) and packet_loss_raw >= 0
+                else None,
+                latency_ms=int(latency_raw)
+                if isinstance(latency_raw, (int, float)) and latency_raw >= 0
+                else None,
+            )
+        )
+
+    limited = items[: max(1, min(payload.limit, 50))]
+    calls_count = len(items)
+    return SessionCostDashboardResponse(
+        total_calls=calls_count,
+        total_estimated_cost_eur=round(total_cost, 6),
+        average_cost_per_call_eur=round(total_cost / calls_count, 6) if calls_count else 0.0,
+        recent_calls=limited,
     )
 
 
