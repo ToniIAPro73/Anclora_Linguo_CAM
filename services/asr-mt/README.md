@@ -132,6 +132,9 @@ Registra presencia de peer autenticado en sala.
 ### `POST /api/rooms/resolve`
 Resuelve contraparte e iniciador de llamada en sala.
 
+### `POST /api/integrations/bot/session`
+Crea sesion firmada para integraciones tipo “bot participant” (Zoom/Meet/Teams) y devuelve `ingest_ws_url`.
+
 ### `GET /api/rooms/subscribe`
 Canal SSE para notificar emparejamiento de sala sin polling agresivo.
 

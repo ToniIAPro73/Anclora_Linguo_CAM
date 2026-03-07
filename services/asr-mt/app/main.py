@@ -391,6 +391,22 @@ class RoomResolveResponse(BaseModel):
     initiator_peer_id: Optional[str]
 
 
+class BotIntegrationSessionRequest(BaseModel):
+    token: str
+    provider: str
+    external_meeting_id: str
+    bot_display_name: str = "Anclora Linguo Bot"
+
+
+class BotIntegrationSessionResponse(BaseModel):
+    status: str
+    provider: str
+    external_meeting_id: str
+    bot_token: str
+    ingest_ws_url: str
+    expires_at: int
+
+
 class TelemetryEvent(BaseModel):
     type: str
     timestamp_ms: int
@@ -1177,6 +1193,56 @@ async def resolve_room(payload: RoomResolveRequest) -> RoomResolveResponse:
     _enforce_rate_limit("rooms", session["user_id"], RATE_LIMIT_ROOMS_PER_WINDOW)
     room_code = _normalize_room_code(payload.room_code)
     return _resolve_room_participants(room_code, payload.requester_peer_id)
+
+
+@app.post(
+    "/api/integrations/bot/session",
+    response_model=BotIntegrationSessionResponse,
+)
+async def create_bot_integration_session(
+    payload: BotIntegrationSessionRequest,
+    request: Request,
+) -> BotIntegrationSessionResponse:
+    session = _validate_token(payload.token)
+    _enforce_rate_limit("bot_session", session["user_id"], RATE_LIMIT_ROOMS_PER_WINDOW)
+
+    provider = payload.provider.strip().lower()[:40]
+    external_meeting_id = payload.external_meeting_id.strip()[:120]
+    if not provider or not external_meeting_id:
+        raise HTTPException(status_code=400, detail="provider and external_meeting_id are required")
+
+    now = int(time.time())
+    exp = now + min(SESSION_TTL_SECONDS, 3600)
+    bot_payload = {
+        "kind": "bot-integration",
+        "owner_user_id": session["user_id"],
+        "provider": provider,
+        "external_meeting_id": external_meeting_id,
+        "bot_display_name": payload.bot_display_name.strip()[:80] or "Anclora Linguo Bot",
+        "iat": now,
+        "exp": exp,
+    }
+    bot_token = _sign_payload(bot_payload)
+    ingest_scheme = "wss" if request.url.scheme == "https" else "ws"
+    ingest_ws_url = f"{ingest_scheme}://{request.url.netloc}/ws/asr-mt"
+
+    _append_audit_event(
+        "bot_integration_session_created",
+        {
+            "owner_user_id": session["user_id"],
+            "provider": provider,
+            "external_meeting_id": external_meeting_id,
+            "expires_at": exp,
+        },
+    )
+    return BotIntegrationSessionResponse(
+        status="ok",
+        provider=provider,
+        external_meeting_id=external_meeting_id,
+        bot_token=bot_token,
+        ingest_ws_url=ingest_ws_url,
+        expires_at=exp,
+    )
 
 
 @app.get("/api/rooms/subscribe")
