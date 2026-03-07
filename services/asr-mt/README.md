@@ -25,8 +25,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 ## Configuracion (env)
-- `ASR_BACKEND` = `mock` (default), `vosk`, `faster-whisper`, `streaming` (alias de `vosk`) o `quality` (alias de `faster-whisper`)
-- `MT_BACKEND` = `mock` o `marian`
+- `ASR_BACKEND` = `mock` (default), `vosk`, `faster-whisper`, `streaming` (alias de `vosk`), `quality` (alias de `faster-whisper`) o `auto` (seleccion por entorno)
+- `MT_BACKEND` = `mock`, `marian` o `auto`
 - `LOG_LEVEL` = `info`
 - `ALLOWED_ORIGINS` = lista separada por coma (default `*`)
 - `SESSION_SIGNING_KEY` = clave HMAC para tokens de sesion (**obligatoria en prod**)
@@ -60,6 +60,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `ASR_MODEL` = `small` (ej. `base`, `small`, `medium`)
 - `ASR_DEVICE` = `cpu` (ej. `cuda`)
 - `ASR_COMPUTE_TYPE` = `int8` (ej. `float16`)
+- `ASR_AUTO_QUALITY_CPU_THRESHOLD_OPS_MS` = umbral de benchmark CPU para escoger `faster-whisper` en `ASR_BACKEND=auto` (default `8500`)
 - `ASR_MIN_CHUNK_MS` = `600`
 - `ASR_MAX_BUFFER_MS` = `30000`
 - `VOSK_MODEL_PATH` = ruta local a modelo Vosk (opcional)
@@ -67,6 +68,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `MT_MODEL` = `Helsinki-NLP/opus-mt-es-en` o `facebook/nllb-200-distilled-600M`
 - `MT_DEVICE` = `cpu`
 - `MT_MODEL_MAP` = `es-en=Helsinki-NLP/opus-mt-es-en,es-fr=Helsinki-NLP/opus-mt-es-fr`
+- `MT_AUTO_PREFERRED` = backend preferido cuando `MT_BACKEND=auto` (`transformers` default)
 
 ## Protocolo WebSocket
 - URL: `ws://localhost:8001/ws/asr-mt`
@@ -144,6 +146,9 @@ Evalua cumplimiento de SLO de subtitulos contra umbrales configurables.
 
 ### `GET /metrics`
 Exporta metricas en formato Prometheus (salud, rooms activas, reconexiones, TTFC/caption lag p95).
+
+### `GET /api/ops/model-recommendation`
+Devuelve recomendacion de backend ASR/MT basada en benchmark CPU rapido + hint de GPU del entorno.
 
 Con `STORAGE_BACKEND=sqlite`, rooms y telemetria sobreviven reinicios del servicio.
 

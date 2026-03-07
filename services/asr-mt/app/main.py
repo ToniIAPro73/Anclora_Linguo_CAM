@@ -440,6 +440,13 @@ class TelemetrySLOResponse(BaseModel):
     threshold_ttfc_ms_p50: int
     threshold_ttfc_ms_p95: int
     threshold_caption_lag_ms_p95: int
+
+
+class ModelRecommendationResponse(BaseModel):
+    asr_backend: str
+    mt_backend: str
+    cpu_ops_per_ms: int
+    gpu_hint: bool
     threshold_dropped_hypothesis_rate_pct: float
 
 
@@ -870,8 +877,47 @@ def _build_prometheus_metrics() -> str:
     return "\n".join(lines) + "\n"
 
 
+def _cpu_ops_per_ms(sample_ms: int = 60) -> int:
+    start = time.perf_counter()
+    deadline = start + (sample_ms / 1000.0)
+    acc = 0
+    ops = 0
+    while time.perf_counter() < deadline:
+        acc = (acc * 1664525 + 1013904223) & 0xFFFFFFFF
+        ops += 1
+    elapsed_ms = max(1.0, (time.perf_counter() - start) * 1000)
+    _ = acc
+    return int(ops / elapsed_ms)
+
+
+def _gpu_hint_available() -> bool:
+    explicit = os.getenv("ASR_DEVICE", "").strip().lower()
+    if explicit.startswith("cuda"):
+        return True
+    cuda_env = os.getenv("CUDA_VISIBLE_DEVICES", "").strip()
+    if cuda_env and cuda_env not in {"-1", "none", "None"}:
+        return True
+    return False
+
+
+def _choose_auto_asr_backend() -> str:
+    if _gpu_hint_available():
+        return "faster-whisper"
+    ops_per_ms = _cpu_ops_per_ms()
+    threshold = int(os.getenv("ASR_AUTO_QUALITY_CPU_THRESHOLD_OPS_MS", "8500"))
+    return "faster-whisper" if ops_per_ms >= threshold else "vosk"
+
+
+def _choose_auto_mt_backend() -> str:
+    preferred = os.getenv("MT_AUTO_PREFERRED", "transformers").strip().lower()
+    return preferred if preferred in {"transformers", "marian", "nllb", "mock"} else "transformers"
+
+
 def build_asr_backend() -> ASRBackend:
     backend = os.getenv("ASR_BACKEND", "mock").lower()
+    if backend == "auto":
+        backend = _choose_auto_asr_backend()
+        logger.info("ASR auto-selected backend: %s", backend)
     if backend == "streaming":
         backend = "vosk"
     elif backend == "quality":
@@ -889,6 +935,9 @@ def build_asr_backend() -> ASRBackend:
 
 def build_mt_backend() -> MTBackend:
     backend = os.getenv("MT_BACKEND", "mock").lower()
+    if backend == "auto":
+        backend = _choose_auto_mt_backend()
+        logger.info("MT auto-selected backend: %s", backend)
     if backend == "mock":
         return MockMTBackend()
     if backend in {"transformers", "marian", "nllb"}:
@@ -905,6 +954,24 @@ async def health() -> dict[str, str]:
 @app.get("/metrics", response_class=PlainTextResponse)
 async def metrics() -> PlainTextResponse:
     return PlainTextResponse(_build_prometheus_metrics())
+
+
+@app.get("/api/ops/model-recommendation", response_model=ModelRecommendationResponse)
+async def model_recommendation() -> ModelRecommendationResponse:
+    cpu_ops = _cpu_ops_per_ms()
+    gpu_hint = _gpu_hint_available()
+    asr_backend = "faster-whisper" if gpu_hint else (
+        "faster-whisper"
+        if cpu_ops >= int(os.getenv("ASR_AUTO_QUALITY_CPU_THRESHOLD_OPS_MS", "8500"))
+        else "vosk"
+    )
+    mt_backend = _choose_auto_mt_backend()
+    return ModelRecommendationResponse(
+        asr_backend=asr_backend,
+        mt_backend=mt_backend,
+        cpu_ops_per_ms=cpu_ops,
+        gpu_hint=gpu_hint,
+    )
 
 
 @app.post("/api/auth/session", response_model=SessionCreateResponse)
