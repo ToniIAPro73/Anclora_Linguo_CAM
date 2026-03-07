@@ -32,3 +32,4 @@ Notes:
 - Optional Bergamot-style in-browser MT provider: expose `window.BergamotTranslator.translate(...)`; app falls back to local glossary when unavailable.
 - CI (`.github/workflows/ci.yml`) runs lint + unit tests + build + Playwright E2E on push/PR.
 - Audio upload backpressure guard can be tuned with `VITE_ASR_WS_MAX_BUFFERED_BYTES`.
+- Prometheus/Grafana setup guide: `docs/observability-prometheus-grafana.md`.

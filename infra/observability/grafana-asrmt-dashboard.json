@@ -1,0 +1,54 @@
+{
+  "title": "Anclora ASR/MT - Runtime",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Service Up",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{"expr": "asrmt_up", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Active Room Participants",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "targets": [{"expr": "asrmt_rooms_active_participants", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Calls Started",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "targets": [{"expr": "asrmt_calls_started_total", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Calls Ended",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "targets": [{"expr": "asrmt_calls_ended_total", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Reconnect Events",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [{"expr": "asrmt_reconnect_events_total", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Subtitle Latency (p95)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [
+        {"expr": "asrmt_caption_ttfc_ms_p95", "refId": "A", "legendFormat": "TTFC p95"},
+        {"expr": "asrmt_caption_lag_ms_p95", "refId": "B", "legendFormat": "Caption lag p95"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Dropped Hypothesis Rate Avg",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+      "targets": [{"expr": "asrmt_dropped_hypothesis_rate_pct_avg", "refId": "A"}]
+    }
+  ]
+}
