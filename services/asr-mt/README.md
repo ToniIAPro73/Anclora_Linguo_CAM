@@ -167,3 +167,16 @@ python scripts/model_manager.py list
 ```
 
 El manifiesto se guarda por defecto en `runtime/models-manifest.json`.
+
+## Benchmark minimo (ASR/MT)
+
+Runner lightweight para WER/CER (ASR) y chrF (MT):
+
+```bash
+cd services/asr-mt
+python scripts/benchmark_runner.py \
+  --asr-ref fixtures/asr_ref.jsonl --asr-hyp fixtures/asr_hyp.jsonl \
+  --mt-ref fixtures/mt_ref.jsonl --mt-hyp fixtures/mt_hyp.jsonl
+```
+
+Guia detallada en `docs/benchmark-minimo-asr-mt.md`.
