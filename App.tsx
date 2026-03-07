@@ -35,6 +35,7 @@ import ChatSidebar from './components/ChatSidebar';
 import VideoGrid from './components/VideoGrid';
 import ControlBar from './components/ControlBar';
 import SettingsModal from './components/SettingsModal';
+import SfuRoomEmbed from './components/SfuRoomEmbed';
 import {
   buildInviteLink,
   extractRoomCode,
@@ -418,6 +419,7 @@ const App: React.FC = () => {
   });
   const [peerConnectionState, setPeerConnectionState] = useState<'connected' | 'reconnecting' | 'down'>('connected');
   const [networkNotice, setNetworkNotice] = useState<string>('');
+  const [activeSfuRoomUrl, setActiveSfuRoomUrl] = useState<string | null>(null);
   const backpressureTelemetryRef = useRef(false);
   const autoDetectedLanguageRef = useRef<string | null>(null);
   const [e2eeState, setE2eeState] = useState<'off' | 'enabled' | 'unsupported' | 'error'>('off');
@@ -1759,8 +1761,10 @@ const App: React.FC = () => {
         return;
       }
       const joinUrl = `${SFU_JOIN_URL}${SFU_JOIN_URL.includes('?') ? '&' : '?'}room=${encodeURIComponent(normalizedRoomCode)}&name=${encodeURIComponent(session.displayName)}`;
-      trackTelemetry('sfu_redirect', { room_code: normalizedRoomCode, topology: 'sfu' });
-      window.open(joinUrl, '_blank', 'noopener,noreferrer');
+      setActiveSfuRoomUrl(joinUrl);
+      setStatus(CallStatus.ACTIVE);
+      setNetworkNotice('');
+      trackTelemetry('sfu_embed_open', { room_code: normalizedRoomCode, topology: 'sfu' });
       return;
     }
     if (peerConnectionState !== 'connected') {
@@ -1908,6 +1912,7 @@ const App: React.FC = () => {
 
   const resetCallState = useCallback(() => {
     setStatus(CallStatus.IDLE);
+    setActiveSfuRoomUrl(null);
     setIsScreenSharing(false);
     setIsPttPressed(false);
     setIsHandsFree(false);
@@ -1955,6 +1960,11 @@ const App: React.FC = () => {
   }, [resetCallState]);
 
   const endCall = async () => {
+    if (CALL_TOPOLOGY === 'sfu' && activeSfuRoomUrl) {
+      trackTelemetry('sfu_embed_closed', { topology: 'sfu' });
+      resetCallState();
+      return;
+    }
     if (isRecording) recording.stopRecording();
     stopStreaming();
 
@@ -2203,37 +2213,43 @@ const App: React.FC = () => {
 
       <div className="flex-1 min-h-0 relative flex">
         <div className="flex-1 p-4 md:p-6 min-h-0">
-          <VideoGrid
-            remoteVideoRef={remoteVideoRef}
-            localVideoRef={localVideoRef}
-            remoteSubtitleConfirmed={remoteSubtitleConfirmed}
-            remoteSubtitleHypothesis={remoteSubtitleHypothesis}
-            localSubtitleConfirmed={localSubtitleConfirmed}
-            localSubtitleHypothesis={localSubtitleHypothesis}
-            isScreenSharing={isScreenSharing}
-            isPttPressed={isPttPressed}
-            isHandsFree={isHandsFree}
-            showHypothesis={showHypothesisSubtitles}
-          />
+          {CALL_TOPOLOGY === 'sfu' && activeSfuRoomUrl ? (
+            <SfuRoomEmbed url={activeSfuRoomUrl} />
+          ) : (
+            <VideoGrid
+              remoteVideoRef={remoteVideoRef}
+              localVideoRef={localVideoRef}
+              remoteSubtitleConfirmed={remoteSubtitleConfirmed}
+              remoteSubtitleHypothesis={remoteSubtitleHypothesis}
+              localSubtitleConfirmed={localSubtitleConfirmed}
+              localSubtitleHypothesis={localSubtitleHypothesis}
+              isScreenSharing={isScreenSharing}
+              isPttPressed={isPttPressed}
+              isHandsFree={isHandsFree}
+              showHypothesis={showHypothesisSubtitles}
+            />
+          )}
         </div>
 
-        <ChatSidebar
-          isChatOpen={isChatOpen}
-          messages={messages}
-          chatInput={chatInput}
-          speakingMessageId={speakingMessageId}
-          translatingMessageId={translatingMessageId}
-          canExportTranscript={transcriptEntries.length > 0}
-          transcriptEntries={transcriptEntries}
-          onClose={() => setIsChatOpen(false)}
-          onExportVtt={exportTranscriptVtt}
-          onExportSrt={exportTranscriptSrt}
-          onTranslate={translateMessage}
-          onSpeak={speakMessage}
-          onChatInputChange={setChatInput}
-          onSendMessage={sendChatMessage}
-          chatEndRef={chatEndRef}
-        />
+        {!(CALL_TOPOLOGY === 'sfu' && activeSfuRoomUrl) ? (
+          <ChatSidebar
+            isChatOpen={isChatOpen}
+            messages={messages}
+            chatInput={chatInput}
+            speakingMessageId={speakingMessageId}
+            translatingMessageId={translatingMessageId}
+            canExportTranscript={transcriptEntries.length > 0}
+            transcriptEntries={transcriptEntries}
+            onClose={() => setIsChatOpen(false)}
+            onExportVtt={exportTranscriptVtt}
+            onExportSrt={exportTranscriptSrt}
+            onTranslate={translateMessage}
+            onSpeak={speakMessage}
+            onChatInputChange={setChatInput}
+            onSendMessage={sendChatMessage}
+            chatEndRef={chatEndRef}
+          />
+        ) : null}
       </div>
 
       <SettingsModal
@@ -2276,32 +2292,43 @@ const App: React.FC = () => {
         </div>
       ) : null}
 
-      <ControlBar
-        isHandsFree={isHandsFree}
-        isPttPressed={isPttPressed}
-        isMuted={isMuted}
-        remoteVolume={remoteVolume}
-        isScreenSharing={isScreenSharing}
-        isRecording={isRecording}
-        showSettings={showSettings}
-        isChatOpen={isChatOpen}
-        hasUnreadPeerMessages={hasUnreadPeerMessages}
-        myLangName={myLangName}
-        remoteLangName={remoteLangName}
-        onToggleHandsFree={() => setIsHandsFree(!isHandsFree)}
-        onPttDown={handlePttDown}
-        onPttUp={handlePttUp}
-        onToggleMute={() => setIsMuted(!isMuted)}
-        onRemoteVolumeChange={(value) => {
-          setRemoteVolume(value);
-          if (isMuted) setIsMuted(false);
-        }}
-        onToggleScreenShare={toggleScreenShare}
-        onToggleRecording={handleToggleRecording}
-        onShowSettings={() => setShowSettings(true)}
-        onEndCall={endCall}
-        onToggleChat={() => setIsChatOpen(!isChatOpen)}
-      />
+      {CALL_TOPOLOGY === 'sfu' && activeSfuRoomUrl ? (
+        <div className="absolute right-4 bottom-5 z-40">
+          <button
+            onClick={endCall}
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold"
+          >
+            Leave SFU room
+          </button>
+        </div>
+      ) : (
+        <ControlBar
+          isHandsFree={isHandsFree}
+          isPttPressed={isPttPressed}
+          isMuted={isMuted}
+          remoteVolume={remoteVolume}
+          isScreenSharing={isScreenSharing}
+          isRecording={isRecording}
+          showSettings={showSettings}
+          isChatOpen={isChatOpen}
+          hasUnreadPeerMessages={hasUnreadPeerMessages}
+          myLangName={myLangName}
+          remoteLangName={remoteLangName}
+          onToggleHandsFree={() => setIsHandsFree(!isHandsFree)}
+          onPttDown={handlePttDown}
+          onPttUp={handlePttUp}
+          onToggleMute={() => setIsMuted(!isMuted)}
+          onRemoteVolumeChange={(value) => {
+            setRemoteVolume(value);
+            if (isMuted) setIsMuted(false);
+          }}
+          onToggleScreenShare={toggleScreenShare}
+          onToggleRecording={handleToggleRecording}
+          onShowSettings={() => setShowSettings(true)}
+          onEndCall={endCall}
+          onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        />
+      )}
 
       <canvas ref={canvasRef} className="hidden" />
     </div>
