@@ -14,7 +14,8 @@ Reducir deuda tecnica en flujo de llamada corrigiendo riesgos de grabacion y mej
   - limpieza robusta de recursos de grabacion (AudioContext, streams, RAF),
   - utilidades de sesion de llamada desacopladas en `utils/callSession.ts`,
   - tests unitarios para utilidades criticas,
-  - baseline E2E Playwright (2 navegadores, join room, llamada, subtitulos).
+  - baseline E2E Playwright (2 navegadores, join room, llamada, subtitulos),
+  - pipeline CI para ejecutar lint+unit+build+e2e en PR/push.
 - No incluye:
   - test matrix multi-red automatizada con perdida/jitter inyectados.
 
@@ -31,9 +32,13 @@ Reducir deuda tecnica en flujo de llamada corrigiendo riesgos de grabacion y mej
 - `playwright.config.ts` + `tests/e2e/call-captions.spec.ts`
   - arranque integrado frontend + peer-server + ASR/MT mock.
   - validacion de flujo real de llamada y recepcion de subtitulos.
+- `.github/workflows/ci.yml`
+  - job unico con `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`.
+  - subida de artefactos Playwright en fallos.
 
 ## 4. Criterios de aceptacion
 - [x] Riesgo de parada temprana de grabacion corregido.
 - [x] Limpieza de recursos tras stop/end call robusta.
 - [x] Tests automatizados agregados y pasando.
+- [x] CI ejecuta quality gates en PR/push.
 - [x] `npm run lint`, `npm run test`, `npm run build` en verde.

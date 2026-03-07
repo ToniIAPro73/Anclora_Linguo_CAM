@@ -18,6 +18,11 @@
 3. Autenticar ambos peers, compartir room e iniciar llamada
 4. Validar recepcion de subtitulos `chunk_*` en remoto
 
+## Caso CI
+1. Abrir PR con cambio de codigo
+2. Verificar ejecucion automatica de workflow `CI`
+3. Validar pasos: lint, test, build, e2e playwright
+
 ## Resultado actual
 - lint: PASS
 - test: PASS (5 tests)
