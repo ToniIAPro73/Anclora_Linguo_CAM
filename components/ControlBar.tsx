@@ -48,7 +48,7 @@ const ControlBar: React.FC<ControlBarProps> = ({
   onToggleChat,
 }) => {
   return (
-    <div className="h-24 glass-panel flex items-center justify-center gap-2 md:gap-5 px-4 md:px-12 rounded-t-[3rem] mt-auto relative">
+    <div className="fixed bottom-0 left-0 right-0 z-40 h-24 md:h-28 glass-panel flex items-center justify-center gap-2 md:gap-5 px-3 md:px-12 rounded-t-[2rem] md:rounded-t-[3rem] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
       <div className="flex flex-col items-center">
         <button
           onClick={onToggleHandsFree}

@@ -37,6 +37,7 @@ export const ENABLE_INSERTABLE_E2EE = env.VITE_ENABLE_INSERTABLE_E2EE === 'true'
 export const REQUIRE_INSERTABLE_E2EE = env.VITE_REQUIRE_INSERTABLE_E2EE === 'true';
 export const E2EE_SHARED_KEY = env.VITE_E2EE_SHARED_KEY || '';
 export const ENABLE_LOCAL_MT_PRIVACY = env.VITE_ENABLE_LOCAL_MT_PRIVACY === 'true';
+export const SHOW_DIAGNOSTIC_OVERLAYS = env.VITE_SHOW_DIAGNOSTIC_OVERLAYS === 'true';
 export const PEER_SERVER_HOST = env.VITE_PEER_SERVER_HOST || 'localhost';
 export const PEER_SERVER_PORT = Number(env.VITE_PEER_SERVER_PORT || 9000);
 export const PEER_SERVER_PATH = env.VITE_PEER_SERVER_PATH || '/peerjs';

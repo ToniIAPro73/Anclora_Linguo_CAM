@@ -18,6 +18,7 @@ import {
   REQUIRE_INSERTABLE_E2EE,
   E2EE_SHARED_KEY,
   ENABLE_LOCAL_MT_PRIVACY,
+  SHOW_DIAGNOSTIC_OVERLAYS,
   PEER_SERVER_HOST,
   PEER_SERVER_PORT,
   PEER_SERVER_PATH,
@@ -800,6 +801,9 @@ const App: React.FC = () => {
     setupCaptionChannels(call, false);
     tryEnableE2EE(call);
     setStatus(CallStatus.ACTIVE);
+    setIsHandsFree(true);
+    setIsPttPressed(false);
+    pttActiveRef.current = false;
     setNetworkNotice('');
     localSubtitleConfirmedRef.current = '';
     remoteSubtitleConfirmedRef.current = '';
@@ -2200,23 +2204,13 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-black overflow-hidden relative">
-      <button
-        onClick={signOut}
-        className="absolute top-4 right-4 z-20 bg-zinc-900/90 border border-zinc-700 text-[11px] px-3 py-1.5 rounded-lg text-zinc-300 hover:text-white"
-      >
-        {session.displayName} ({session.role})
-      </button>
+    <div className="flex flex-col h-[100dvh] min-h-[100dvh] bg-black overflow-hidden relative">
       <CallHeader
         peerId={peerId}
         qualityLabel={QUALITY_PROFILES[quality].label.split(' ')[0]}
         isRecording={isRecording}
-        latencyMs={latencyMs}
-        bitrateKbps={webrtcStats.bitrateKbps}
-        packetLossPct={webrtcStats.packetLossPct}
         peerConnectionState={peerConnectionState}
-        translationConnectionState={translationConnectionState}
-        translationReconnectAttempts={translationReconnectAttempts}
+        showDiagnostics={SHOW_DIAGNOSTIC_OVERLAYS}
         e2eeState={e2eeState}
       />
 
@@ -2226,7 +2220,7 @@ const App: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 relative flex">
+      <div className="flex-1 min-h-0 relative flex pb-24 md:pb-28">
         <div className="flex-1 p-4 md:p-6 min-h-0">
           {CALL_TOPOLOGY === 'sfu' && activeSfuRoomUrl ? (
             <SfuRoomEmbed url={activeSfuRoomUrl} />
