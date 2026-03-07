@@ -14,6 +14,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - cache de traducciones en backend,
   - micro-batching de traducciones parciales en WS para reducir inferencias MT,
   - smart chunking adaptativo de audio (`fast/normal/stable`) segun jitter/perdida/latencia,
+  - control de carga por backpressure en WS (descarta chunks bajo congestion para evitar backlog),
   - cuotas por sesion para traduccion y TTS,
   - estimacion de coste por sesion (`/api/sessions/cost`),
   - guardrails anti-abuso con rate limiting por IP/sesion en endpoints criticos y WS,
@@ -61,6 +62,9 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - estabilizacion de subtitulos con `confirmed_text + hypothesis_text`.
   - ajuste dinamico de `chunkSize` del AudioWorklet en llamada activa.
   - emite `session_cost_estimated_eur` en evento de fin de llamada.
+  - emite telemetria de backpressure (`audio_backpressure_started/recovered`, dropped chunks).
+- `hooks/useStreamingTranslation.ts`
+  - aplica umbral `maxBufferedBytes` sobre `WebSocket.bufferedAmount` con hysteresis.
 - `components/VideoGrid.tsx`
   - render diferenciado de hipotesis (tenue) y texto confirmado.
 - `audio-worklet-processor.js`
@@ -81,6 +85,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - [x] Ruta ASR se puede elegir por entorno (`streaming` o `quality`).
 - [x] Backend MT soporta micro-batching configurable para parciales WS.
 - [x] Smart chunking de audio se adapta en runtime sin reiniciar llamada.
+- [x] Backpressure guard evita crecimiento no acotado del buffer WS en red degradada.
 - [x] Guardrails anti-abuso aplican limites de peticiones/mensajes configurables.
 - [x] Backend expone estimacion de coste de sesion basada en uso.
 - [x] Variables de entorno y README actualizados.

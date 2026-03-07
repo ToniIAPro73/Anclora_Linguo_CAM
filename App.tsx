@@ -5,6 +5,7 @@ import {
   SAMPLE_RATE,
   ASR_MT_WS_URL,
   ASR_MT_HTTP_URL,
+  ASR_WS_MAX_BUFFERED_BYTES,
   AUDIO_CHUNK_FRAMES,
   VAD_THRESHOLD,
   VAD_MIN_SPEECH_MS,
@@ -408,6 +409,7 @@ const App: React.FC = () => {
   });
   const [peerConnectionState, setPeerConnectionState] = useState<'connected' | 'reconnecting' | 'down'>('connected');
   const [networkNotice, setNetworkNotice] = useState<string>('');
+  const backpressureTelemetryRef = useRef(false);
   const [e2eeState, setE2eeState] = useState<'off' | 'enabled' | 'unsupported' | 'error'>('off');
 
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -477,6 +479,7 @@ const App: React.FC = () => {
     wsUrl: ASR_MT_WS_URL,
     sampleRate: SAMPLE_RATE,
     chunkFrames: AUDIO_CHUNK_FRAMES,
+    maxBufferedBytes: ASR_WS_MAX_BUFFERED_BYTES,
     vadThreshold: VAD_THRESHOLD,
     minSpeechMs: VAD_MIN_SPEECH_MS,
     minSilenceMs: VAD_MIN_SILENCE_MS,
@@ -542,6 +545,8 @@ const App: React.FC = () => {
     latencyMs,
     connectionState: translationConnectionState,
     reconnectAttempts: translationReconnectAttempts,
+    droppedAudioChunks,
+    isBackpressured,
     setSendActive,
     setEndpointingConfig,
     start: startStreaming,
@@ -934,6 +939,27 @@ const App: React.FC = () => {
       setNetworkNotice('');
     }
   }, [status, translationConnectionState, translationReconnectAttempts]);
+
+  useEffect(() => {
+    if (status !== CallStatus.ACTIVE) return;
+    if (isBackpressured && !backpressureTelemetryRef.current) {
+      backpressureTelemetryRef.current = true;
+      trackTelemetryRef.current('audio_backpressure_started', {
+        dropped_audio_chunks: droppedAudioChunks,
+      });
+      setNetworkNotice('Audio upload congested. Prioritizing call stability over subtitle freshness.');
+      return;
+    }
+    if (!isBackpressured && backpressureTelemetryRef.current) {
+      backpressureTelemetryRef.current = false;
+      trackTelemetryRef.current('audio_backpressure_recovered', {
+        dropped_audio_chunks: droppedAudioChunks,
+      });
+      if (translationConnectionState === 'connected') {
+        setNetworkNotice('');
+      }
+    }
+  }, [droppedAudioChunks, isBackpressured, status, translationConnectionState]);
 
   useEffect(() => {
     if (status !== CallStatus.ACTIVE) return;
@@ -1862,6 +1888,7 @@ const App: React.FC = () => {
     captionLagSamplesRef.current = [];
     hypothesisSentRef.current = 0;
     hypothesisDroppedRef.current = 0;
+    backpressureTelemetryRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -1904,6 +1931,8 @@ const App: React.FC = () => {
       packet_loss_pct: webrtcStats.packetLossPct ?? -1,
       latency_ms: latencyMs ?? -1,
       session_cost_estimated_eur: sessionCostEur,
+      dropped_audio_chunks: droppedAudioChunks,
+      audio_backpressure_active: isBackpressured,
     });
     resetCallState();
   };

@@ -4,6 +4,7 @@ interface StreamingTranslationOptions {
   wsUrl: string;
   sampleRate: number;
   chunkFrames: number;
+  maxBufferedBytes: number;
   vadThreshold: number;
   minSpeechMs: number;
   minSilenceMs: number;
@@ -24,6 +25,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     wsUrl,
     sampleRate,
     chunkFrames,
+    maxBufferedBytes,
     vadThreshold,
     minSpeechMs,
     minSilenceMs,
@@ -37,6 +39,8 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [connectionState, setConnectionState] = useState<WsConnectionState>('idle');
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [droppedAudioChunks, setDroppedAudioChunks] = useState(0);
+  const [isBackpressured, setIsBackpressured] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -49,6 +53,9 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
   const reconnectTimerRef = useRef<number | null>(null);
   const lastPartialTextRef = useRef('');
   const lastCommittedTextRef = useRef('');
+  const droppedAudioChunksRef = useRef(0);
+  const backpressuredRef = useRef(false);
+  const lowWatermarkRef = useRef(Math.max(4096, Math.floor(maxBufferedBytes * 0.5)));
 
   const sourceLangRef = useRef(sourceLang);
   const targetLangRef = useRef(targetLang);
@@ -86,6 +93,8 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     ws.onclose = null;
     ws.close();
     wsRef.current = null;
+    backpressuredRef.current = false;
+    setIsBackpressured(false);
   }, []);
 
   const scheduleReconnect = useCallback(() => {
@@ -124,6 +133,8 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
         );
         setConnectionState('connected');
         setReconnectAttempts(0);
+        backpressuredRef.current = false;
+        setIsBackpressured(false);
       };
 
       ws.onmessage = (event) => {
@@ -194,6 +205,8 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
       );
       setConnectionState('connected');
       setReconnectAttempts(0);
+      backpressuredRef.current = false;
+      setIsBackpressured(false);
     };
 
     ws.onmessage = (event) => {
@@ -275,6 +288,22 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
         return;
       }
       if (event.data?.type !== 'audio') return;
+      const buffered = ws.bufferedAmount;
+      if (backpressuredRef.current && buffered <= lowWatermarkRef.current) {
+        backpressuredRef.current = false;
+        setIsBackpressured(false);
+      }
+      if (buffered >= maxBufferedBytes) {
+        droppedAudioChunksRef.current += 1;
+        if (droppedAudioChunksRef.current % 5 === 0) {
+          setDroppedAudioChunks(droppedAudioChunksRef.current);
+        }
+        if (!backpressuredRef.current) {
+          backpressuredRef.current = true;
+          setIsBackpressured(true);
+        }
+        return;
+      }
       ws.send(event.data.payload);
       lastChunkSentAtRef.current = performance.now();
     };
@@ -298,6 +327,7 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     onSubtitle,
     sampleRate,
     vadThreshold,
+    maxBufferedBytes,
   ]);
 
   const stop = useCallback(() => {
@@ -321,9 +351,14 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
       audioContextRef.current = null;
     }
 
+    droppedAudioChunksRef.current = 0;
+    setDroppedAudioChunks(0);
     lastChunkSentAtRef.current = null;
     lastPartialTextRef.current = '';
     lastCommittedTextRef.current = '';
+    setDroppedAudioChunks(droppedAudioChunksRef.current);
+    backpressuredRef.current = false;
+    setIsBackpressured(false);
     streamRef.current = null;
     setConnectionState('idle');
     setReconnectAttempts(0);
@@ -355,10 +390,16 @@ export function useStreamingTranslation(options: StreamingTranslationOptions) {
     restartIfReady();
   }, [sourceLang, targetLang, restartIfReady]);
 
+  useEffect(() => {
+    lowWatermarkRef.current = Math.max(4096, Math.floor(maxBufferedBytes * 0.5));
+  }, [maxBufferedBytes]);
+
   return {
     latencyMs,
     connectionState,
     reconnectAttempts,
+    droppedAudioChunks,
+    isBackpressured,
     setSendActive,
     setEndpointingConfig,
     start,

@@ -24,6 +24,7 @@ export const FRAME_RATE = 1; // Frames per second for visual context
 export const JPEG_QUALITY = 0.6;
 export const ASR_MT_WS_URL = env.VITE_ASR_MT_WS_URL || 'ws://localhost:8001/ws/asr-mt';
 export const ASR_MT_HTTP_URL = env.VITE_ASR_MT_HTTP_URL || 'http://localhost:8001';
+export const ASR_WS_MAX_BUFFERED_BYTES = Number(env.VITE_ASR_WS_MAX_BUFFERED_BYTES || 262144);
 export const AUDIO_CHUNK_FRAMES = 320;
 export const VAD_THRESHOLD = 0.01;
 export const VAD_MIN_SPEECH_MS = 220;

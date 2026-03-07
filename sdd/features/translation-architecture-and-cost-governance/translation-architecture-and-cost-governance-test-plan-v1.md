@@ -50,6 +50,10 @@
 - Consumir translate/tts y consultar `POST /api/sessions/cost`.
 - Esperado: `estimated_total_cost_eur` > 0 y coherente con chars consumidos.
 
+12. WS backpressure guard
+- Configurar `VITE_ASR_WS_MAX_BUFFERED_BYTES` bajo y simular red lenta.
+- Esperado: aumento de `dropped_audio_chunks` y eventos `audio_backpressure_started/recovered`.
+
 11. Rate limit chat translate
 - Configurar `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW=2` y ejecutar 3 requests en <60s.
 - Esperado: tercera request responde 429.
