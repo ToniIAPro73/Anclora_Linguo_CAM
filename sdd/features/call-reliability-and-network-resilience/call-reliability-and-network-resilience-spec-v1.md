@@ -35,6 +35,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
   - estado de signaling PeerJS (`connected/reconnecting/down`).
   - reconexion `peer.reconnect()` en `disconnected`.
   - envio de hipotesis en canal no fiable (`maxRetransmits:0`) y commits en canal fiable.
+  - deduplicacion y control de orden de subtitulos por `caption_id/seq` en recepcion remota.
   - perfil de endpointing dinamico (`normal/aggressive`) segun `jitterMs` y `packetLossPct`.
   - avisos de red y degradacion en runtime.
   - bloqueo de inicio de llamada si signaling no esta conectado.
@@ -63,6 +64,7 @@ Aumentar resiliencia de llamada en redes inestables con reconexion automatica en
 - [x] PeerJS intenta reconexion tras perdida de signaling.
 - [x] Hipotesis de subtitulos priorizan latencia con canal no fiable.
 - [x] Commits finales de subtitulos viajan por canal fiable.
+- [x] Subtitulos remotos ignoran duplicados y mensajes fuera de orden.
 - [x] Endpointing por silencio/max-segment fuerza commits sin cerrar stream.
 - [x] Endpointing se vuelve mas agresivo cuando suben jitter/perdida.
 - [x] Topologia de llamada se puede configurar por entorno (`p2p` o `sfu`).

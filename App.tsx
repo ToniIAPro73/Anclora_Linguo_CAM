@@ -448,6 +448,8 @@ const App: React.FC = () => {
   const captionsHypChannelRef = useRef<RTCDataChannel | null>(null);
   const captionsCommitChannelRef = useRef<RTCDataChannel | null>(null);
   const subtitleSeqRef = useRef(0);
+  const remoteSubtitleOrderRef = useRef({ lastHypSeq: -1, lastCommitSeq: -1 });
+  const seenCaptionIdsRef = useRef<string[]>([]);
 
   const appendTranscriptEntry = useCallback((speaker: string, text: string) => {
     const cleaned = text.trim();
@@ -500,6 +502,7 @@ const App: React.FC = () => {
       }
       const payload = {
         type: 'subtitle',
+        caption_id: `cap-${sequence}`,
         text,
         is_final: isFinal,
         origin_ts_ms: originTsMs,
@@ -599,6 +602,35 @@ const App: React.FC = () => {
   const handleIncomingSubtitle = useCallback((payload: any) => {
     const text = typeof payload?.text === 'string' ? payload.text : '';
     if (!text) return;
+    const captionId = typeof payload?.caption_id === 'string' ? payload.caption_id : '';
+    if (captionId) {
+      if (seenCaptionIdsRef.current.includes(captionId)) {
+        return;
+      }
+      seenCaptionIdsRef.current.push(captionId);
+      if (seenCaptionIdsRef.current.length > 300) {
+        seenCaptionIdsRef.current.splice(0, seenCaptionIdsRef.current.length - 300);
+      }
+    }
+    const seq = typeof payload?.seq === 'number' ? payload.seq : Number(payload?.seq ?? -1);
+    const isFinal = Boolean(payload?.is_final);
+    const orderState = remoteSubtitleOrderRef.current;
+    if (Number.isFinite(seq) && seq >= 0) {
+      if (isFinal) {
+        if (seq <= orderState.lastCommitSeq) {
+          return;
+        }
+        orderState.lastCommitSeq = seq;
+        if (orderState.lastHypSeq < seq) {
+          orderState.lastHypSeq = seq;
+        }
+      } else {
+        if (seq <= Math.max(orderState.lastHypSeq, orderState.lastCommitSeq)) {
+          return;
+        }
+        orderState.lastHypSeq = seq;
+      }
+    }
     const originTsMs =
       typeof payload.origin_ts_ms === 'number'
         ? payload.origin_ts_ms
@@ -623,21 +655,21 @@ const App: React.FC = () => {
       remoteSubtitleTrackRef.current.lastHypothesis,
       remoteSubtitleTrackRef.current.stableCount,
       text,
-      Boolean(payload.is_final),
+      isFinal,
     );
     remoteSubtitleTrackRef.current = {
       lastHypothesis: next.lastHypothesis,
       stableCount: next.stableCount,
     };
     remoteSubtitleConfirmedRef.current = next.confirmed;
-    if (payload.is_final) {
+    if (isFinal) {
       appendTranscriptEntry('Peer', text);
     }
     setRemoteSubtitleConfirmed(next.confirmed);
     setRemoteSubtitleHypothesis(next.hypothesis);
-    const subtitleTimeout = payload.is_final ? 4000 : 1800;
+    const subtitleTimeout = isFinal ? 4000 : 1800;
     setTimeout(() => {
-      if (payload.is_final) {
+      if (isFinal) {
         remoteSubtitleConfirmedRef.current = '';
         setRemoteSubtitleConfirmed('');
         setRemoteSubtitleHypothesis('');
@@ -741,6 +773,8 @@ const App: React.FC = () => {
     setRemoteSubtitleConfirmed('');
     setRemoteSubtitleHypothesis('');
     setTranscriptEntries([]);
+    remoteSubtitleOrderRef.current = { lastHypSeq: -1, lastCommitSeq: -1 };
+    seenCaptionIdsRef.current = [];
     callStartedAtRef.current = Date.now();
     firstRemoteSubtitleAtRef.current = null;
     captionLagSamplesRef.current = [];
@@ -817,6 +851,7 @@ const App: React.FC = () => {
     (window as any).__E2E_SEND_SUBTITLE = (text: string) => {
       const payload = {
         type: 'subtitle',
+        caption_id: `cap-${subtitleSeqRef.current}`,
         text,
         is_final: true,
         origin_ts_ms: Date.now(),
@@ -1804,6 +1839,8 @@ const App: React.FC = () => {
     captionsHypChannelRef.current = null;
     captionsCommitChannelRef.current = null;
     subtitleSeqRef.current = 0;
+    remoteSubtitleOrderRef.current = { lastHypSeq: -1, lastCommitSeq: -1 };
+    seenCaptionIdsRef.current = [];
     callStartedAtRef.current = null;
     firstRemoteSubtitleAtRef.current = null;
     captionLagSamplesRef.current = [];

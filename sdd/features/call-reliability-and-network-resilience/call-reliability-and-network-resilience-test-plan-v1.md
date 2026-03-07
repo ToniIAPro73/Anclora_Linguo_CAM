@@ -48,6 +48,10 @@
 - Verificar en llamada activa que el header muestra `E2EE ENABLED`.
 - En navegador sin soporte, verificar `E2EE UNSUPPORTED` y telemetria `e2ee_unsupported`.
 
+11. Dedupe/out-of-order de subtitulos
+- Inyectar subtitulos con `seq` repetido o menor al ultimo commit.
+- Verificar que el render remoto ignora duplicados/mensajes atrasados.
+
 ## Resultado actual
 - lint: PASS
 - build: PASS
