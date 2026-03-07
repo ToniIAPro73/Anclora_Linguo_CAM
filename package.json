@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:network": "E2E_NETWORK_PROFILE=true playwright test e2e/call-captions-network.e2e.ts --workers=1 --retries=2"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0",

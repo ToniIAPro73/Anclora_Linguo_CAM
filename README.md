@@ -22,6 +22,9 @@ Prerequisites:
 Run the minimal 2-browser flow (room join + call + subtitle assertion):
 `npm run test:e2e`
 
+Run constrained-network E2E gate (Chromium/CDP, retries enabled):
+`npm run test:e2e:network`
+
 Notes:
 - No LLM API key is required in frontend.
 - For production-like reliability, configure TURN in `VITE_ICE_SERVERS`.
