@@ -16,6 +16,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - smart chunking adaptativo de audio (`fast/normal/stable`) segun jitter/perdida/latencia,
   - control de carga por backpressure en WS (descarta chunks bajo congestion para evitar backlog),
   - deteccion automatica basica de idioma (LID heuristico) cuando `myLang=auto`,
+  - modo local/privacy parcial para chat (`VITE_ENABLE_LOCAL_MT_PRIVACY`) sin llamadas backend MT,
   - cuotas por sesion para traduccion y TTS,
   - estimacion de coste por sesion (`/api/sessions/cost`),
   - guardrails anti-abuso con rate limiting por IP/sesion en endpoints criticos y WS,
@@ -65,8 +66,11 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - emite `session_cost_estimated_eur` en evento de fin de llamada.
   - emite telemetria de backpressure (`audio_backpressure_started/recovered`, dropped chunks).
   - fija `myLang` automaticamente tras deteccion con confianza en flujo `auto`.
+  - cuando `VITE_ENABLE_LOCAL_MT_PRIVACY=true`, chat translate/tts usa traduccion local.
 - `utils/languageDetection.ts`
   - heuristica lightweight para alfabetos y palabras frecuentes (es/en/fr/de/it/pt/ru/ja/ko/zh).
+- `utils/localMt.ts`
+  - traductor local lightweight (frases/palabras frecuentes) para privacidad parcial.
 - `hooks/useStreamingTranslation.ts`
   - aplica umbral `maxBufferedBytes` sobre `WebSocket.bufferedAmount` con hysteresis.
 - `components/VideoGrid.tsx`
@@ -91,6 +95,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - [x] Smart chunking de audio se adapta en runtime sin reiniciar llamada.
 - [x] Backpressure guard evita crecimiento no acotado del buffer WS en red degradada.
 - [x] LID basico fija idioma local automaticamente cuando estaba en `auto`.
+- [x] Modo local/privacy parcial evita llamadas backend para chat MT/TTS.
 - [x] Guardrails anti-abuso aplican limites de peticiones/mensajes configurables.
 - [x] Backend expone estimacion de coste de sesion basada en uso.
 - [x] Variables de entorno y README actualizados.

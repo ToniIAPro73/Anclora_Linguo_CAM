@@ -17,6 +17,7 @@ import {
   ENABLE_INSERTABLE_E2EE,
   REQUIRE_INSERTABLE_E2EE,
   E2EE_SHARED_KEY,
+  ENABLE_LOCAL_MT_PRIVACY,
   PEER_SERVER_HOST,
   PEER_SERVER_PORT,
   PEER_SERVER_PATH,
@@ -44,6 +45,7 @@ import {
 import { toSrt, toVtt, TranscriptEntry } from './utils/transcript';
 import { applyInsertableE2EE, supportsInsertableStreams } from './utils/e2ee';
 import { detectLanguageHeuristic } from './utils/languageDetection';
+import { translateLocalText } from './utils/localMt';
 
 interface ChatMessage {
   id: string;
@@ -1665,6 +1667,16 @@ const App: React.FC = () => {
     try {
       const source = msg.sender === 'peer' ? remoteLang : myLang;
       const target = msg.sender === 'peer' ? myLang : remoteLang;
+      if (ENABLE_LOCAL_MT_PRIVACY) {
+        const localTranslation = translateLocalText(msg.text, source, target);
+        if (localTranslation) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msg.id ? { ...m, translatedText: localTranslation } : m)),
+          );
+          trackTelemetry('local_mt_used', { mode: 'chat_translate', source_lang: source, target_lang: target });
+        }
+        return;
+      }
       const response = await apiPost<{ translated_text: string }>('/api/chat/translate', {
         token: session.token,
         text: msg.text,
@@ -1692,6 +1704,19 @@ const App: React.FC = () => {
     try {
       const source = msg.sender === 'peer' ? remoteLang : myLang;
       const target = msg.sender === 'peer' ? myLang : remoteLang;
+      if (ENABLE_LOCAL_MT_PRIVACY) {
+        const textToSpeak = translateLocalText(msg.translatedText || msg.text, source, target);
+        if (!textToSpeak) return;
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = target;
+        utterance.rate = 1;
+        utterance.onend = () => setSpeakingMessageId(null);
+        utterance.onerror = () => setSpeakingMessageId(null);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+        trackTelemetry('local_mt_used', { mode: 'chat_tts', source_lang: source, target_lang: target });
+        return;
+      }
       const ttsResponse = await apiPost<{ text_to_speak: string; voice_lang: string }>('/api/chat/tts', {
         token: session.token,
         text: msg.translatedText || msg.text,

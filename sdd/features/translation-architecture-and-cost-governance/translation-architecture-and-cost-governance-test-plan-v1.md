@@ -58,13 +58,17 @@
 - Configurar `myLang=auto` y hablar frases claras de un idioma soportado.
 - Esperado: emision de evento `auto_language_detected` y fijacion de `myLang`.
 
-11. Rate limit chat translate
+14. Rate limit chat translate
 - Configurar `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW=2` y ejecutar 3 requests en <60s.
 - Esperado: tercera request responde 429.
 
-12. Rate limit ws messages
+15. Rate limit ws messages
 - Configurar `RATE_LIMIT_WS_MESSAGES_PER_WINDOW` bajo y enviar audio continuo.
 - Esperado: backend emite error y cierra WS con codigo de overload.
+
+16. Local MT privacy mode
+- Configurar `VITE_ENABLE_LOCAL_MT_PRIVACY=true`.
+- Verificar que translate/tts de chat funcionan sin llamadas a `/api/chat/translate` ni `/api/chat/tts`.
 
 ## Resultado actual
 - lint: PASS
