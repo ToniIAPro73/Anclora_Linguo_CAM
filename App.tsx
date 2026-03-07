@@ -78,6 +78,10 @@ interface UsageSummary {
   tts_limit: number;
 }
 
+interface SessionCostSummary {
+  estimated_total_cost_eur: number;
+}
+
 interface RoomResolveResponse {
   room_code: string;
   participants: number;
@@ -1122,6 +1126,18 @@ const App: React.FC = () => {
     }
   }, [apiPost]);
 
+  const fetchSessionCost = useCallback(async (authToken: string): Promise<number | null> => {
+    try {
+      const summary = await apiPost<SessionCostSummary>('/api/sessions/cost', { token: authToken });
+      if (typeof summary.estimated_total_cost_eur === 'number') {
+        return summary.estimated_total_cost_eur;
+      }
+    } catch (error) {
+      console.error('Session cost error:', error);
+    }
+    return null;
+  }, [apiPost]);
+
   const runCpuProbe = useCallback(() => {
     const probeWindowMs = 250;
     const start = performance.now();
@@ -1852,7 +1868,7 @@ const App: React.FC = () => {
     resetCallStateRef.current = resetCallState;
   }, [resetCallState]);
 
-  const endCall = () => {
+  const endCall = async () => {
     if (isRecording) recording.stopRecording();
     stopStreaming();
 
@@ -1882,10 +1898,12 @@ const App: React.FC = () => {
       hypothesis_dropped: hypothesisDroppedRef.current,
       dropped_hypothesis_rate_pct: droppedRate,
     });
+    const sessionCostEur = session?.token ? await fetchSessionCost(session.token) : null;
     trackTelemetry('call_ended', {
       bitrate_kbps: webrtcStats.bitrateKbps ?? -1,
       packet_loss_pct: webrtcStats.packetLossPct ?? -1,
       latency_ms: latencyMs ?? -1,
+      session_cost_estimated_eur: sessionCostEur,
     });
     resetCallState();
   };

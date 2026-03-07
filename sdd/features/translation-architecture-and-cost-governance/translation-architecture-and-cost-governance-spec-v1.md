@@ -15,6 +15,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - micro-batching de traducciones parciales en WS para reducir inferencias MT,
   - smart chunking adaptativo de audio (`fast/normal/stable`) segun jitter/perdida/latencia,
   - cuotas por sesion para traduccion y TTS,
+  - estimacion de coste por sesion (`/api/sessions/cost`),
   - guardrails anti-abuso con rate limiting por IP/sesion en endpoints criticos y WS,
   - endpoint de consumo de sesion (`/api/sessions/usage`),
   - UI con consumo de cuota en llamada,
@@ -45,6 +46,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - endpoints nuevos:
     - `POST /api/chat/tts`
     - `POST /api/sessions/usage`
+    - `POST /api/sessions/cost`
   - `POST /api/chat/translate` ahora aplica cuota + audit de uso.
 
 - `services/asr-mt/app/backends.py`
@@ -58,6 +60,7 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
   - refresco de consumo de cuota despues de traducir/hablar.
   - estabilizacion de subtitulos con `confirmed_text + hypothesis_text`.
   - ajuste dinamico de `chunkSize` del AudioWorklet en llamada activa.
+  - emite `session_cost_estimated_eur` en evento de fin de llamada.
 - `components/VideoGrid.tsx`
   - render diferenciado de hipotesis (tenue) y texto confirmado.
 - `audio-worklet-processor.js`
@@ -79,5 +82,6 @@ Consolidar traduccion y TTS bajo backend gestionado y agregar gobernanza de cost
 - [x] Backend MT soporta micro-batching configurable para parciales WS.
 - [x] Smart chunking de audio se adapta en runtime sin reiniciar llamada.
 - [x] Guardrails anti-abuso aplican limites de peticiones/mensajes configurables.
+- [x] Backend expone estimacion de coste de sesion basada en uso.
 - [x] Variables de entorno y README actualizados.
 - [x] `npm run lint` y `npm run build` en verde.

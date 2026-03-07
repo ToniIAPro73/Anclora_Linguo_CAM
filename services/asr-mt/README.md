@@ -34,6 +34,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 - `AUDIT_LOG_PATH` = ruta de log append-only (default `runtime/audit-log.jsonl`)
 - `MAX_TRANSLATION_CHARS_PER_SESSION` = cuota de traduccion por sesion (default `20000`)
 - `MAX_TTS_CHARS_PER_SESSION` = cuota de TTS por sesion (default `12000`)
+- `COST_PER_TRANSLATED_CHAR_EUR` = coste estimado por caracter traducido (default `0.0000008`)
+- `COST_PER_TTS_CHAR_EUR` = coste estimado por caracter TTS (default `0.0000004`)
 - `MT_MICRO_BATCH_WINDOW_MS` = ventana de micro-batch para parciales WS (default `35`)
 - `MT_MICRO_BATCH_MAX_ITEMS` = max parciales por batch (default `4`)
 - `MT_MICRO_BATCH_MAX_CHARS` = max caracteres acumulados por batch (default `220`)
@@ -111,6 +113,9 @@ Unifica flujo de TTS bajo backend: traduce/prepara texto y aplica cuota de TTS p
 
 ### `POST /api/sessions/usage`
 Devuelve consumo de sesion para gobernanza de coste (`translated_chars`, `tts_chars`, limites).
+
+### `POST /api/sessions/cost`
+Devuelve estimacion de coste de sesion a partir de consumo MT/TTS y tarifas configuradas.
 
 ### `POST /api/rooms/register`
 Registra presencia de peer autenticado en sala.

@@ -46,6 +46,10 @@
 - Durante llamada, forzar condiciones de red mala (perdida/jitter) y luego red estable.
 - Esperado: evento `audio_chunk_profile_changed` cambia entre `stable`/`normal`/`fast` y el stream no se reinicia.
 
+11. Session cost endpoint
+- Consumir translate/tts y consultar `POST /api/sessions/cost`.
+- Esperado: `estimated_total_cost_eur` > 0 y coherente con chars consumidos.
+
 11. Rate limit chat translate
 - Configurar `RATE_LIMIT_CHAT_TRANSLATE_PER_WINDOW=2` y ejecutar 3 requests en <60s.
 - Esperado: tercera request responde 429.

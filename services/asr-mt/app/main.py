@@ -48,6 +48,10 @@ MAX_TRANSLATION_CHARS_PER_SESSION = int(
     os.getenv("MAX_TRANSLATION_CHARS_PER_SESSION", "20000")
 )
 MAX_TTS_CHARS_PER_SESSION = int(os.getenv("MAX_TTS_CHARS_PER_SESSION", "12000"))
+COST_PER_TRANSLATED_CHAR_EUR = float(
+    os.getenv("COST_PER_TRANSLATED_CHAR_EUR", "0.0000008")
+)
+COST_PER_TTS_CHAR_EUR = float(os.getenv("COST_PER_TTS_CHAR_EUR", "0.0000004"))
 MT_MICRO_BATCH_WINDOW_MS = int(os.getenv("MT_MICRO_BATCH_WINDOW_MS", "35"))
 MT_MICRO_BATCH_MAX_ITEMS = int(os.getenv("MT_MICRO_BATCH_MAX_ITEMS", "4"))
 MT_MICRO_BATCH_MAX_CHARS = int(os.getenv("MT_MICRO_BATCH_MAX_CHARS", "220"))
@@ -327,6 +331,18 @@ class SessionUsageResponse(BaseModel):
     tts_chars: int
     translated_limit: int
     tts_limit: int
+
+
+class SessionCostRequest(BaseModel):
+    token: str
+
+
+class SessionCostResponse(BaseModel):
+    translated_chars: int
+    tts_chars: int
+    estimated_translation_cost_eur: float
+    estimated_tts_cost_eur: float
+    estimated_total_cost_eur: float
 
 
 class RoomRegisterRequest(BaseModel):
@@ -792,6 +808,22 @@ async def session_usage(payload: SessionUsageRequest) -> SessionUsageResponse:
         tts_chars=usage["tts_chars"],
         translated_limit=MAX_TRANSLATION_CHARS_PER_SESSION,
         tts_limit=MAX_TTS_CHARS_PER_SESSION,
+    )
+
+
+@app.post("/api/sessions/cost", response_model=SessionCostResponse)
+async def session_cost(payload: SessionCostRequest) -> SessionCostResponse:
+    session = _validate_token(payload.token)
+    usage = _usage_bucket(session["user_id"])
+    translation_cost = usage["translated_chars"] * COST_PER_TRANSLATED_CHAR_EUR
+    tts_cost = usage["tts_chars"] * COST_PER_TTS_CHAR_EUR
+    total_cost = translation_cost + tts_cost
+    return SessionCostResponse(
+        translated_chars=usage["translated_chars"],
+        tts_chars=usage["tts_chars"],
+        estimated_translation_cost_eur=round(translation_cost, 6),
+        estimated_tts_cost_eur=round(tts_cost, 6),
+        estimated_total_cost_eur=round(total_cost, 6),
     )
 
 
