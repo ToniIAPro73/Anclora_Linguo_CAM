@@ -16,7 +16,7 @@ export function CookieConsent() {
         setPreferences({ necessary: true, session: true, analytics: Boolean(parsed.analytics), marketing: Boolean(parsed.marketing), updatedAt: parsed.updatedAt ?? '', version: 'v1' });
         return;
       }
-    } catch {}
+    } catch { /* ignore parse errors */ }
     setOpen(true);
   }, []);
   useEffect(() => {
