@@ -37,6 +37,9 @@ import VideoGrid from './components/VideoGrid';
 import ControlBar from './components/ControlBar';
 import SettingsModal from './components/SettingsModal';
 import SfuRoomEmbed from './components/SfuRoomEmbed';
+import { CookieConsent } from './components/CookieConsent';
+import { LegalFooter } from './components/LegalFooter';
+import { LegalPage } from './components/LegalPage';
 import {
   buildInviteLink,
   extractRoomCode,
@@ -2062,6 +2065,11 @@ const App: React.FC = () => {
     endCall();
   };
 
+  const legalPath = typeof window !== 'undefined' ? window.location.pathname.replace(/^\/+/, '') : '';
+  if (legalPath === 'privacy' || legalPath === 'terms' || legalPath === 'legal') {
+    return <LegalPage kind={legalPath} />;
+  }
+
   if (authLoading) {
     return (
       <div className="h-screen w-full bg-black text-white flex items-center justify-center">
@@ -2072,66 +2080,71 @@ const App: React.FC = () => {
 
   if (!session) {
     return (
-      <div className="h-screen w-full bg-black text-white flex items-center justify-center px-6 relative">
-        <div className="absolute top-4 left-4 z-20">
-          <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
-            <i className="fas fa-globe text-zinc-300 text-xs"></i>
-            <select
-              value={uiLocale}
-              onChange={(e) => setUiLocale(e.target.value as UiLocale)}
-              className="bg-transparent text-zinc-200 text-sm outline-none"
-            >
-              {UI_LOCALE_OPTIONS.map((locale) => (
-                <option key={locale.code} value={locale.code} className="bg-zinc-900">
-                  {locale.label}
-                </option>
-              ))}
-            </select>
+      <>
+        <div className="h-screen w-full bg-black text-white flex items-center justify-center px-6 relative">
+          <div className="absolute top-4 left-4 z-20">
+            <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
+              <i className="fas fa-globe text-zinc-300 text-xs"></i>
+              <select
+                value={uiLocale}
+                onChange={(e) => setUiLocale(e.target.value as UiLocale)}
+                className="bg-transparent text-zinc-200 text-sm outline-none"
+              >
+                {UI_LOCALE_OPTIONS.map((locale) => (
+                  <option key={locale.code} value={locale.code} className="bg-zinc-900">
+                    {locale.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
-        <form
-          onSubmit={handleAuthenticate}
-          className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4"
-        >
-          <h1 className="text-2xl font-bold">{ui.secureAccess}</h1>
-          <p className="text-sm text-zinc-400">{ui.secureAccessDesc}</p>
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wide text-zinc-500">{ui.name}</label>
-            <input
-              value={authName}
-              onChange={(e) => setAuthName(e.target.value)}
-              placeholder={ui.namePlaceholder}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wide text-zinc-500">{ui.role}</label>
-            <select
-              value={authRole}
-              onChange={(e) => setAuthRole(e.target.value as 'agent' | 'investor')}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-            >
-              <option value="agent">{ui.agent}</option>
-              <option value="investor">{ui.investor}</option>
-            </select>
-          </div>
-          {authError ? <p className="text-sm text-red-400">{authError}</p> : null}
-          <button
-            type="submit"
-            disabled={isAuthenticating}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 rounded-lg py-2 font-semibold"
+          <form
+            onSubmit={handleAuthenticate}
+            className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4"
           >
-            {isAuthenticating ? ui.creatingSession : ui.enterWorkspace}
-          </button>
-        </form>
-      </div>
+            <h1 className="text-2xl font-bold">{ui.secureAccess}</h1>
+            <p className="text-sm text-zinc-400">{ui.secureAccessDesc}</p>
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-wide text-zinc-500">{ui.name}</label>
+              <input
+                value={authName}
+                onChange={(e) => setAuthName(e.target.value)}
+                placeholder={ui.namePlaceholder}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-wide text-zinc-500">{ui.role}</label>
+              <select
+                value={authRole}
+                onChange={(e) => setAuthRole(e.target.value as 'agent' | 'investor')}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
+              >
+                <option value="agent">{ui.agent}</option>
+                <option value="investor">{ui.investor}</option>
+              </select>
+            </div>
+            {authError ? <p className="text-sm text-red-400">{authError}</p> : null}
+            <button
+              type="submit"
+              disabled={isAuthenticating}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 rounded-lg py-2 font-semibold"
+            >
+              {isAuthenticating ? ui.creatingSession : ui.enterWorkspace}
+            </button>
+          </form>
+        </div>
+        <LegalFooter locale={uiLocale} />
+        <CookieConsent />
+      </>
     );
   }
 
   if (status === CallStatus.IDLE || status === CallStatus.CONNECTING) {
     return (
-      <div className="bg-black min-h-[100dvh]">
-        <div className="px-3 pt-3 sm:px-5 sm:pt-4">
+      <>
+        <div className="bg-black min-h-[100dvh]">
+          <div className="px-3 pt-3 sm:px-5 sm:pt-4">
           <div className="mx-auto w-full max-w-[900px] flex flex-wrap items-center justify-center sm:justify-between gap-2">
             <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 rounded-xl px-3 py-2">
               <i className="fas fa-globe text-zinc-300 text-xs"></i>
@@ -2199,7 +2212,10 @@ const App: React.FC = () => {
             checkingPrecheck: ui.checkingPrecheck,
           }}
         />
-      </div>
+        </div>
+        <LegalFooter locale={uiLocale} />
+        <CookieConsent />
+      </>
     );
   }
 
@@ -2340,6 +2356,8 @@ const App: React.FC = () => {
       )}
 
       <canvas ref={canvasRef} className="hidden" />
+      <LegalFooter locale={uiLocale} />
+      <CookieConsent />
     </div>
   );
 };
